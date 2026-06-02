@@ -14,11 +14,82 @@
 
 package Google::Auth::ServiceAccountCredentials;
 
-use JSON::XS;
 use strict;
+use warnings;
 
-my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
+use Moo;
+use JSON::PP;
 
-our $VERSION = 0.02;
+our $VERSION = '0.02';
+
+has json_key => (
+    is       => 'ro',
+    required => 0,
+);
+
+has project_id => (
+    is       => 'ro',
+    required => 0,
+);
+
+has private_key_id => (
+    is       => 'ro',
+    required => 0,
+);
+
+has private_key => (
+    is       => 'ro',
+    required => 0,
+);
+
+has client_email => (
+    is       => 'ro',
+    required => 0,
+);
+
+has client_id => (
+    is       => 'ro',
+    required => 0,
+);
+
+has auth_uri => (
+    is       => 'ro',
+    required => 0,
+);
+
+has token_uri => (
+    is       => 'ro',
+    required => 0,
+);
+
+has auth_provider_x509_cert_url => (
+    is       => 'ro',
+    required => 0,
+);
+
+has client_x509_cert_url => (
+    is       => 'ro',
+    required => 0,
+);
+
+around BUILDARGS => sub {
+    my ( $orig, $class, @args ) = @_;
+    my $args = $class->$orig(@args);
+
+    if ( my $json = $args->{json_key} ) {
+        $args->{project_id}                  //= $json->{project_id};
+        $args->{private_key_id}              //= $json->{private_key_id};
+        $args->{private_key}                 //= $json->{private_key};
+        $args->{client_email}                //= $json->{client_email};
+        $args->{client_id}                   //= $json->{client_id};
+        $args->{auth_uri}                    //= $json->{auth_uri};
+        $args->{token_uri}                   //= $json->{token_uri};
+        $args->{auth_provider_x509_cert_url} //= $json->{auth_provider_x509_cert_url};
+        $args->{client_x509_cert_url}        //= $json->{client_x509_cert_url};
+    }
+
+    return $args;
+};
 
 1;
+

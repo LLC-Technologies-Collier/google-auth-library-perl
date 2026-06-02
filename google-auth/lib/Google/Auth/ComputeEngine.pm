@@ -14,11 +14,18 @@
 
 package Google::Auth::ComputeEngine;
 
-use JSON::XS;
 use strict;
+use warnings;
 
-my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
+use Moo;
 
-our $VERSION = 0.02;
+our $VERSION = '0.02';
+
+sub on_gce {
+    my ( $class, %options ) = @_;
+    # Return false for now until metadata server detection is implemented
+    return 0;
+}
 
 1;
+

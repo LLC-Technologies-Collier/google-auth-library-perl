@@ -14,11 +14,17 @@
 
 package Google::Auth::UserAuthorizer;
 
-use JSON::XS;
 use strict;
+use warnings;
 
-my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
+use Moo;
 
-our $VERSION = 0.02;
+our $VERSION = '0.02';
+
+has json_key => (
+    is       => 'ro',
+    required => 0,
+);
 
 1;
+

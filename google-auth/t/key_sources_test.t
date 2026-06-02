@@ -25,7 +25,7 @@ use Test::More;
 
 use Crypt::PK::ECC;
 use Crypt::PK::RSA;
-use Crypt::OpenSSL::CA;
+
 
 use FindBin;
 
@@ -37,7 +37,7 @@ diag(
 
 BEGIN
 {
-    plan tests => 44;
+    plan tests => 43;
     $ENV{TESTING} = 1;
     use_ok('Google::Auth::IDTokens::KeySources') || print "Bail out!\n";
 }
@@ -140,54 +140,64 @@ TODO:
 # X509CertHttpKeySource
 #
 
-my $dn = Crypt::OpenSSL::CA::X509_NAME->new(
-    C  => 'BE',
-    O  => 'Test',
-    OU => 'Test',
-    CN => 'Test'
+my $cert1_pem = join("\n",
+    '-----BEGIN CERTIFICATE-----',
+    'MIIDVTCCAj2gAwIBAgIUaDYZDCO5z2+9zzCJoOWuz15Xdx4wDQYJKoZIhvcNAQEL',
+    'BQAwOjELMAkGA1UEBhMCQkUxDTALBgNVBAoMBFRlc3QxDTALBgNVBAsMBFRlc3Qx',
+    'DTALBgNVBAMMBFRlc3QwHhcNMjYwNjAyMDY1NTM2WhcNMjcwNjAyMDY1NTM2WjA6',
+    'MQswCQYDVQQGEwJCRTENMAsGA1UECgwEVGVzdDENMAsGA1UECwwEVGVzdDENMAsG',
+    'A1UEAwwEVGVzdDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKtAhX5l',
+    'fw9A9ikiTcDZeVkV5lHJdeXvlL8DerWp1UpOy7iHJaj2AMUly02nrro1EGk+wuGs',
+    's274o0IYter5mDaaW4ICwlvwsi69S/Acr15ilh5iHr6wjs4zKmDoK4nkFD6p9//A',
+    'kcAAyaXoGGOeVHeG+8jTUAuIKB1bK7KcFA/e448iLXDbFhxw/sN5JJoXvCFFzTYR',
+    '8wxU5fewl9Z+IStr8br4eGqM3FUngCEQpsE2GqrqTplHvt0G0VN19WzTZzxUTviw',
+    '3fiexTS9gB5tGoCrHszomVBRytl1WzqHBaKSYl2hBYYJg2sI4rvk38siYSEmZRis',
+    'QMXU0meG6rc38i8CAwEAAaNTMFEwHQYDVR0OBBYEFGgojs4jmyXHCFKbdDNv0S7a',
+    'Wn7KMB8GA1UdIwQYMBaAFGgojs4jmyXHCFKbdDNv0S7aWn7KMA8GA1UdEwEB/wQF',
+    'MAMBAf8wDQYJKoZIhvcNAQELBQADggEBAKOa0cJP5uwc9/CLYykNaajYFZ+gvAnj',
+    'V9xe+j183jIt1FNGRj/t3wojEc+oUQck2Uw9hdye5wQB6v2ScsalbmEOU1bCNpBI',
+    'NA2w7KszoXzJn+lgpgQdBsAGVVGTR8gWTt8TBPzRUCugiAIAXBAfZdTbfl4upibI',
+    'IgwTGDGVCd3kdoy6BR156abCYNvYZJQp/zrHygDKGi5IoQanyw4tgToLyE+rU9V6',
+    'TM0BTsTinxEdwXI5WhWMquGv9o6wcgC4iJeUjSxHVsYu2pm7FykcyaVLYYKR304q',
+    'WiMOQo6bndLCBGC7MuB67ytkys3qVXiz1ZO9I9qixkEDKGN2/pHsA8Y=',
+    '-----END CERTIFICATE-----',
+    ''
 );
 
-ok( defined $dn, 'instance of Crypt::OpenSSL::CA::X509_Name is defined' );
+my $cert2_pem = join("\n",
+    '-----BEGIN CERTIFICATE-----',
+    'MIIDVTCCAj2gAwIBAgIUC+c3aIZCG9xl/jTRVOXT0PnvAwMwDQYJKoZIhvcNAQEL',
+    'BQAwOjELMAkGA1UEBhMCQkUxDTALBgNVBAoMBFRlc3QxDTALBgNVBAsMBFRlc3Qx',
+    'DTALBgNVBAMMBFRlc3QwHhcNMjYwNjAyMDY1NTM2WhcNMjcwNjAyMDY1NTM2WjA6',
+    'MQswCQYDVQQGEwJCRTENMAsGA1UECgwEVGVzdDENMAsGA1UECwwEVGVzdDENMAsG',
+    'A1UEAwwEVGVzdDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMRgIItR',
+    'w0VCMt1fUJ0xdSzzKlbBEU+ETHjMUgm0nYCVY7c/9eM/Xw8vqBe9yhkpG/NBWyC5',
+    'rjo9rBpzq48zWUlhKWAXuGa5SH5CVrksQK9zvYWys+v3CfPMmjw2jVpq0VmgReIw',
+    'WVyC4C0Ye472ybymzkS2QYfSgr7JK/odJsNzd0L1nkpfK9yl8UaTMEuCs5vx4B31',
+    'R+kVxNTipZ8c6bcUgr+TZE+pFHVFnQJnl2kiy55Us3/ksKHpzmq6eCTWG0ZYM0hx',
+    '8sAzjRkJKbBFf8YqkkIbWPzahYvQ3ojGrC63A3NHg+E4MjOjfUaaRMHGFxN5VNKU',
+    '82EQYtgOMDtfa58CAwEAAaNTMFEwHQYDVR0OBBYEFC0zoF0brlUVaIvaljJ9fJHt',
+    'F8KUMB8GA1UdIwQYMBaAFC0zoF0brlUVaIvaljJ9fJHtF8KUMA8GA1UdEwEB/wQF',
+    'MAMBAf8wDQYJKoZIhvcNAQELBQADggEBAHP0Xq8cyaVsVqrNrXOQRgNvqFKGauGb',
+    'Dl0QroPe8OY5SkIWKwP5wZSQNYeloCqZi6+C/v5LaZwY8AbVqJPBmw0C4UJttxBV',
+    'KSDOsZmy258wS39a++B95iflSe39umWRq8KCyeLP1b4fDVgNIMJNEFIS+TIrFOph',
+    '5780XII79HLdqzHhKWbyM8wZFrMxvCaTlf7fmHjv+Q86K36ST7RpfHpPOediqGMJ',
+    'g53yvuLq5IJwFdAFhP6P4HLPZmxspXxl5YLoKMGxr3N+SBJzBgftFMz2BycOMH2K',
+    'ZWGpKVhurKkObcJQpGq7x4mqJGTIiVTexttnOthlFZY286X8X3UAt1U=',
+    '-----END CERTIFICATE-----',
+    ''
+);
 
-$key1 = Crypt::PK::RSA->new();
-$key1->generate_key( 256, 65537 );
-
-$key2 = Crypt::PK::RSA->new();
-$key2->generate_key( 256, 65537 );
-
-my ( $cert1, $cert2 ) = ( generate_cert($key1), generate_cert($key2), );
-
-my ( $id1, $id2 ) = ( "1234", "5678" );
+my ( $id1, $id2 ) = ( '1234', '5678' );
 
 my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
 
 $certs_body = {
-    $id1 => $cert1->{pem},
-    $id2 => $cert2->{pem}
+    $id1 => $cert1_pem,
+    $id2 => $cert2_pem
 };
 $certs_body_json = $coder->encode($certs_body);
 
-sub generate_cert
-{
-    my ($key) = @_;
-
-    my $k = Crypt::OpenSSL::CA::PrivateKey->parse(
-        $key->export_key_pem('private') );
-    my $pubkey = $k->get_public_key;
-
-    my $x509 = Crypt::OpenSSL::CA::X509->new($pubkey);
-    $x509->set_subject_DN($dn);
-    $x509->set_issuer_DN($dn);
-    $x509->set_notBefore( DateTime->now->strftime("%Y%m%d%H%M%SZ") );
-    $x509->set_notAfter(
-        DateTime->now->add( days => 365 )->strftime("%Y%m%d%H%M%SZ") );
-    $x509->set_serial("0x0");
-
-    return {
-        pem  => $x509->sign( $k, "sha1" ),
-        x509 => $x509
-    };
-}
 
 #
 # Correct exception thrown when JSON not found

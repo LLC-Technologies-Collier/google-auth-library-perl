@@ -14,11 +14,19 @@
 
 package Google::Auth;
 
-use Google::Auth::EnvironmentVars;
-
 use 5.006;
 use strict;
 use warnings;
+
+use Google::Auth::EnvironmentVars;
+use Google::Auth::DefaultCredentials;
+use Google::Auth::ComputeEngine;
+use Google::Auth::Exceptions;
+use XSLoader;
+
+our $VERSION = '0.02';
+XSLoader::load( 'Google::Auth', $VERSION );
+
 
 =head1 NAME
 
@@ -33,7 +41,6 @@ Version 0.02
 
 =cut
 
-our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -53,7 +60,7 @@ if you don't export anything, such as for a purely object-oriented module.
 
 =head1 SUBROUTINES/METHODS
 
-=head2 default( $scopes, $request )
+=head2 default( $scopes, $options )
 
 Gets the default credentials for the current environment.
 
@@ -62,15 +69,33 @@ Gets the default credentials for the current environment.
 #[%- Perl::Critic::Policy::Subroutines::ProhibitBuiltinHomonyms %]
 sub default
 {
-    my ( $self, $copes, $request ) = @_;
-    print("Not yet implemented\n");
-    return;
+    my ( $self, $scopes, $options ) = @_;
+    $options //= {};
+
+    my $dc = Google::Auth::DefaultCredentials->new();
+
+    my $creds = $dc->from_env( $scopes, %$options )
+             || $dc->from_well_known_path( $scopes, %$options )
+             || $dc->from_system_default_path( $scopes, %$options );
+
+    return $creds if $creds;
+
+    if ( Google::Auth::ComputeEngine->on_gce( %$options ) ) {
+        return Google::Auth::ComputeEngine->new( scope => $scopes, %$options );
+    }
+
+    Google::Auth::DefaultCredentialsError->throw(
+        'Your credentials were not found. To set up Application Default '
+      . 'Credentials for your environment, see '
+      . 'https://cloud.google.com/docs/authentication/external/set-up-adc'
+    );
 }
 
 # I have no idea why my perlcritic throws this
 #[%- Perl::Critic::Policy::Modules::RequireEndWithOne %]
 # End of Google::Auth
 1;
+
 
 =head1 AUTHOR
 

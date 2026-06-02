@@ -25,7 +25,7 @@ use Test::More;
 
 use Crypt::PK::ECC;
 use Crypt::PK::RSA;
-use Crypt::OpenSSL::CA;
+
 
 use FindBin;
 
