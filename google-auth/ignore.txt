@@ -16,3 +16,4 @@ pod2htm*.tmp
 pm_to_blib
 Google-Auth-Library-Perl-*
 Google-Auth-Library-Perl-*.tar.gz
+^tmp/

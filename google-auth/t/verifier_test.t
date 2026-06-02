@@ -23,8 +23,6 @@ use Test::Deep;
 use Test::LWP::UserAgent;
 use Test::More;
 
-use Crypt::PK::ECC;
-use Crypt::PK::RSA;
 
 
 use FindBin;
@@ -33,9 +31,7 @@ use DateTime;
 
 #require "helper"
 
-diag(
-"Testing Google::Auth::IDTokens::Verifier $Google::Auth::IDTokens::Verifier::VERSION, Perl $], $^X"
-);
+note("Testing Google::Auth::IDTokens::Verifier $Google::Auth::IDTokens::Verifier::VERSION, Perl $], $^X");
 
 BEGIN
 {
@@ -85,7 +81,7 @@ my $oidc_jwk_bodk = q{
 my $expected_aud = "http://example.com";
 my $expected_azp =
 '542339357638-cr0dserr2evg7sv1meghqeu703274f3h@developer.gserviceaccount.com';
-my $unexpired_test_time = localtime 1591339181;
+my $unexpired_test_time = 1591339181;
 my $expired_test_time   = $unexpired_test_time + 86400;
 
 =pod

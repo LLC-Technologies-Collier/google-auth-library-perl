@@ -22,9 +22,7 @@ BEGIN
     use_ok('Google::Auth::EnvironmentVars') || print "Bail out!\n";
 }
 
-diag(
-"Testing Google::Auth::EnvironmentVars $Google::Auth::EnvironmentVars::VERSION, Perl $], $^X"
-);
+note("Testing Google::Auth::EnvironmentVars $Google::Auth::EnvironmentVars::VERSION, Perl $], $^X");
 
 my $prj_str = 'test-project-string';
 

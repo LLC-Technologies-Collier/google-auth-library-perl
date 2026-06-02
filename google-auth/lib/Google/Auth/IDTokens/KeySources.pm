@@ -24,9 +24,9 @@ use JSON::XS;
 use Mutex;
 use HTTP::Request::Common;
 use LWP::UserAgent;
-use Crypt::PK::ECC;
-use Crypt::PK::RSA;
-use Crypt::X509;
+use Google::Auth;
+use MIME::Base64 qw(decode_base64);
+
 
 our $VERSION = 0.02;
 
@@ -56,12 +56,14 @@ my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
 sub new
 {
     my ( $class, $params ) = @_;
+    $params //= {};
     $class = ref $class if ref $class;
     my $self = bless {
         id        => $params->{id}        // undef,
         key       => $params->{key}       // undef,
         algorithm => $params->{algorithm} // undef,
     }, $class;
+    return $self;
 }
 
 ##
@@ -96,26 +98,28 @@ sub from_jwk
     my ( $self, $jwk ) = @_;
     $jwk = $self->ensure_json_parsed($jwk);
 
+    my $instance = ref $self ? $self : $self->new();
+
     if ( $jwk->{kty} eq 'RSA' )
     {
-        $self->{key} = $self->extract_rsa_key($jwk);
+        $instance->{key} = $instance->extract_rsa_key($jwk);
     }
     elsif ( $jwk->{kty} eq 'EC' )
     {
-        $self->{key} = $self->extract_ec_key($jwk);
+        $instance->{key} = $instance->extract_ec_key($jwk);
     }
     elsif ( !defined $jwk->{kty} )
     {
-        die "Key type not found";
+        die 'Key type not found';
     }
     else
     {
-        die "Cannot use key type $jwk->{kty}";
+        die 'Cannot use key type ' . $jwk->{kty};
     }
-    $self->{id}        = $jwk->{kid};
-    $self->{algorithm} = $jwk->{alg};
+    $instance->{id}        = $jwk->{kid};
+    $instance->{algorithm} = $jwk->{alg};
 
-    return $self;
+    return $instance;
 }
 ##
 # Create an array of KeyInfo from a JWK Set, which may be given as
@@ -161,33 +165,50 @@ sub symbolize_keys
     return $result;
 }
 
+sub _decode_base64url
+{
+    my ($s) = @_;
+    $s =~ tr{-_}{+/};
+    my $padding = length($s) % 4;
+    if ($padding)
+    {
+        $s .= '=' x ( 4 - $padding );
+    }
+    return MIME::Base64::decode_base64($s);
+}
+
 sub extract_rsa_key
 {
     my ( $self, $jwk ) = @_;
-
-    my $pk = Crypt::PK::RSA->new();
-    $pk->import_key($jwk);
-    return $pk;
+    my $n = _decode_base64url( $jwk->{n} );
+    my $e = _decode_base64url( $jwk->{e} );
+    my $pubkey = Google::Auth::load_rsa_pubkey( $n, $e );
+    die 'Failed to load RSA public key' unless defined $pubkey;
+    return $pubkey;
 }
 
 # @private
 my $CURVE_NAME_MAP = {
-    "P-256"     => "prime256v1",
-    "P-384"     => "secp384r1",
-    "P-521"     => "secp521r1",
-    "secp256k1" => "secp256k1"
+    'P-256'     => 'prime256v1',
+    'P-384'     => 'secp384r1',
+    'P-521'     => 'secp521r1',
+    'secp256k1' => 'secp256k1'
 };
 
 sub extract_ec_key
 {
     my ( $self, $jwk ) = @_;
-    die "Unsupported EC curve $jwk->{crv}"
-        unless exists $CURVE_NAME_MAP->{ $jwk->{crv} };
+    my $curve = $jwk->{crv};
+    die 'Unsupported EC curve ' . $curve
+        unless exists $CURVE_NAME_MAP->{$curve};
 
-    my $pk = Crypt::PK::ECC->new();
-    $pk->import_key($jwk);
+    my $x = _decode_base64url( $jwk->{x} );
+    my $y = _decode_base64url( $jwk->{y} );
 
-    return $pk;
+    my $openssl_curve = $CURVE_NAME_MAP->{$curve};
+    my $pubkey = Google::Auth::load_ec_pubkey( $openssl_curve, $x, $y );
+    die 'Failed to load EC public key' unless defined $pubkey;
+    return $pubkey;
 }
 
 1;
@@ -392,7 +413,7 @@ sub interpret_json
         Google::Auth::IDTokens::KeyInfo->new(
             {
                 id        => $_,
-                key       => Crypt::X509->new( cert => $data->{$_} )->pubkey,
+                key       => Google::Auth::load_pubkey_from_x509_cert( $data->{$_} ),
                 algorithm => $self->{algorithm}
             }
         );
@@ -427,7 +448,8 @@ sub interpret_json
 {
     my ( $self, $data ) = @_;
     confess 'data is a required argument' unless $data;
-    return Google::Auth::IDTokens::KeyInfo->from_jwk_set($data);
+    my $jwks = Google::Auth::IDTokens::KeyInfo->from_jwk_set($data);
+    return @$jwks;
 }
 
 ##

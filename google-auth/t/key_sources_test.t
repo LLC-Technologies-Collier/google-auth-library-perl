@@ -23,17 +23,13 @@ use Test::Deep;
 use Test::LWP::UserAgent;
 use Test::More;
 
-use Crypt::PK::ECC;
-use Crypt::PK::RSA;
 
 
 use FindBin;
 
 use DateTime;
 
-diag(
-"Testing Google::Auth::IDTokens::KeySources $Google::Auth::IDTokens::KeySources::VERSION, Perl $], $^X"
-);
+note("Testing Google::Auth::IDTokens::KeySources $Google::Auth::IDTokens::KeySources::VERSION, Perl $], $^X");
 
 BEGIN
 {
@@ -422,9 +418,9 @@ TODO:
     is( $keys->[0]->{id}, $id1, 'first key matches' );
     is( $keys->[1]->{id}, $id2, 'second key matches' );
     is( ref $keys->[0]->{key},
-        'Crypt::PK::RSA', 'key type for first key is correct' );
+        'Google::Auth::PublicKey', 'key type for first key is correct' );
     is( ref $keys->[1]->{key},
-        'Crypt::PK::ECC', 'key type for second key is correct' );
+        'Google::Auth::PublicKey', 'key type for second key is correct' );
 }
 is( $keys->[0]->{algorithm}, 'RS256', 'first algorithm matches' );
 TODO:

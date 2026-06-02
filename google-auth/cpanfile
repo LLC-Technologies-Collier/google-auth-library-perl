@@ -1,8 +1,6 @@
 #requires 'DateTime ';
 requires 'Moo';
-requires 'Crypt::PK::ECC';
-requires 'Crypt::PK::RSA';
-requires 'Crypt::X509';
+
 requires 'Mutex';
 requires 'Throwable::Error';
 requires 'Perl::Critic';

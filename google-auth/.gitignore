@@ -11,3 +11,6 @@ MYMETA.yml
 *.o
 *.bs
 *.so
+
+# Temporary files
+tmp/

@@ -35,9 +35,7 @@ WriteMakefile(
     BUILD_REQUIRES => {
         'DateTime' => '1.54',
         'LWP::UserAgent' => '0',
-        'Crypt::PK::ECC' => 0,
-        'Crypt::PK::RSA' => 0,
-        'Crypt::X509' => 0,
+
         'Test::Exception' => '0',
         'Test::LWP::UserAgent' => '0',
         'Test::More' => '0',
