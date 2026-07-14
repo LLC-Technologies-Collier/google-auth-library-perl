@@ -1,0 +1,18 @@
+# Ignore build directories and files
+blib/
+pm_to_blib
+blibdirs
+
+# Ignore MakeMaker generated files
+Makefile
+Makefile.old
+
+# Ignore CPAN metadata
+MYMETA.yml
+MYMETA.json
+
+# Ignore temporary test files and directories
+tmp/
+
+# Ignore compiled distribution archives
+*.tar.gz

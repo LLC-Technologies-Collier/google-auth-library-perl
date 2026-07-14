@@ -15,6 +15,6 @@ package Google::Auth::Signet;
 
 package Google::Auth::Signet::OAuth2;
 
-use LWP::Authen::OAuth2;
+#use LWP::Authen::OAuth2;
 
 # to be based on googleapis/google-auth-library-ruby/lib/googleauth/signet.rb

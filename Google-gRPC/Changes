@@ -1,0 +1,5 @@
+Revision history for Google::gRPC
+
+0.02    2026-06-24
+        - Extracted from Google::Auth distribution into its own standalone package.
+        - Enforced strict Single Responsibility Principle (SRP) separation.

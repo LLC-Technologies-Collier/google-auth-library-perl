@@ -17,7 +17,7 @@ package Google::Auth::CloudSDK;
 use strict;
 use warnings;
 
-use JSON::XS;
+#use JSON::MaybeXS;
 use Google::Auth::EnvironmentVars;
 
 1;

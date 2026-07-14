@@ -194,8 +194,8 @@ sub _determine_class_for_type {
         return 'Google::Auth::ServiceAccountCredentials';
     }
     elsif ( $type eq 'authorized_user' ) {
-        require Google::Auth::UserAuthorizer;
-        return 'Google::Auth::UserAuthorizer';
+        require Google::Auth::UserRefreshCredentials;
+        return 'Google::Auth::UserRefreshCredentials';
     }
     elsif ( $type eq 'compute_engine' ) {
         require Google::Auth::ComputeEngine;

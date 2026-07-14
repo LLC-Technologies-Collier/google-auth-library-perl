@@ -80,6 +80,12 @@ has client_x509_cert_url => (
     required => 0,
 );
 
+has scope => (
+    is       => 'ro',
+    required => 0,
+);
+
+
 has ua => (
     is      => 'ro',
     default => sub { LWP::UserAgent->new( timeout => 10 ) },
@@ -130,13 +136,19 @@ sub fetch_access_token {
     };
     $header->{kid} = $self->private_key_id if defined $self->private_key_id;
 
+    my $scope = $self->scope;
+    if ( ref($scope) eq 'ARRAY' ) {
+        $scope = join(' ', @$scope);
+    }
+
     my $payload = {
-        iss => $client_email,
-        sub => $client_email,
-        aud => $token_uri,
-        exp => $now + 3600,
-        iat => $now,
+        iss   => $client_email,
+        sub   => $client_email,
+        aud   => $token_uri,
+        exp   => $now + 3600,
+        iat   => $now,
     };
+    $payload->{scope} = $scope if defined $scope;
 
     my $header_b64  = _encode_base64url(encode_json($header));
     my $payload_b64 = _encode_base64url(encode_json($payload));

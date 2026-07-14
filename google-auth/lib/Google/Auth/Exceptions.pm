@@ -32,10 +32,25 @@ our $VERSION = '0.02';
 
 # Base class for all google.auth errors
 
-#[%- Perl::Critic::Policy::Modules::ProhibitMultiplePackages %]
 package Google::Auth::Error;
 use Moo;
-extends 'Throwable::Error';
+use overload '""' => \&to_string, fallback => 1;
+
+has message => ( is => 'ro', required => 1 );
+
+sub to_string {
+    my ($self) = @_;
+    return $self->message;
+}
+
+sub throw {
+    my ($class, $message) = @_;
+    if (ref $class) {
+        die $class;
+    }
+    my $self = $class->new({ message => $message || 'Unknown error' });
+    die $self;
+}
 
 # Used to indicate an error occurred during an HTTP request
 #[%- Perl::Critic::Policy::Modules::ProhibitMultiplePackages %]

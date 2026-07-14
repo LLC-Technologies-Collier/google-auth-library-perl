@@ -19,11 +19,8 @@ use strict;
 use warnings;
 
 use URI;
-use DateTime;
-use JSON::XS;
-use Mutex;
-use HTTP::Request::Common;
-use LWP::UserAgent;
+use JSON::MaybeXS;
+use HTTP::Tiny;
 use Google::Auth;
 use MIME::Base64 qw(decode_base64);
 
@@ -44,7 +41,7 @@ package Google::Auth::IDTokens::KeyInfo;
 
 use Carp;
 
-my $coder = JSON::XS->new->ascii->pretty->allow_nonref;
+my $coder = JSON::MaybeXS->new->ascii->pretty->allow_nonref;
 
 ##
 # Create a public key info structure.
@@ -297,9 +294,8 @@ sub new
 
     my $self = bless {
         retry_interval => $params->{retry_interval} || $DEFAULT_RETRY_INTERVAL,
-        allow_refresh_at => DateTime->now,
+        allow_refresh_at => time(),
         current_keys     => [],
-        monitor          => Mutex->new,
         uri              => URI->new( $params->{uri} ),
     }, $class;
 
@@ -309,7 +305,7 @@ sub new
     }
     else
     {
-        $self->{ua} = LWP::UserAgent->new( timeout => 10 );
+        $self->{ua} = HTTP::Tiny->new( timeout => 10 );
     }
 
     return $self;
@@ -338,10 +334,10 @@ sub current_keys { return $_[0]->{current_keys} }
 sub refresh_keys
 {
     my ($self) = @_;
-    $self->{allow_refresh_at} = DateTime->now
+    $self->{allow_refresh_at} = time()
       unless( exists $self->{allow_refresh_at} );
 
-    if ( DateTime->compare( DateTime->now, $self->{allow_refresh_at} ) < 0 )
+    if ( time() < $self->{allow_refresh_at} )
     {
         print STDERR 'cache hit', $/ if $ENV{TESTING} && $ENV{VERBOSE};
         return $self->{current_keys};
@@ -350,18 +346,32 @@ sub refresh_keys
 
     my $response = $self->{ua}->get( $self->{uri} );
 
-    die( "KeySourceError: Unable to retrieve data from $self->{uri}: "
-            . $response->status_line() )
-        unless $response->is_success;
+    my ( $success, $status, $reason, $content );
+    if ( ref($response) eq 'HASH' )
+    {
+        $success = $response->{success};
+        $status  = $response->{status};
+        $reason  = $response->{reason};
+        $content = $response->{content};
+    }
+    else
+    {
+        $success = $response->is_success;
+        $status  = $response->code;
+        $reason  = $response->message;
+        $content = $response->decoded_content;
+    }
+
+    die( "KeySourceError: Unable to retrieve data from $self->{uri}: $status $reason" )
+        unless $success;
 
     $self->{last_response} = $response;
-    my $data = eval { $coder->decode( $response->decoded_content ) };
+    my $data = eval { $coder->decode($content) };
     die("KeySourceError: Unable to parse JSON: $@") if $@;
 
     $self->{current_keys} = [ $self->interpret_json($data) ];
 
-    $self->{allow_refresh_at} =
-      DateTime->now()->add( seconds => $self->{retry_interval} );
+    $self->{allow_refresh_at} = time() + $self->{retry_interval};
 
     return $self->{current_keys};
 }

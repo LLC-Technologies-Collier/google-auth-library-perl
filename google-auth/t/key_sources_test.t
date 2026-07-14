@@ -20,14 +20,13 @@ use Test::More;
 use Test::Exception;
 use Test::Deep;
 
+use JSON::XS;
 use Test::LWP::UserAgent;
 use Test::More;
 
 
 
 use FindBin;
-
-use DateTime;
 
 note("Testing Google::Auth::IDTokens::KeySources $Google::Auth::IDTokens::KeySources::VERSION, Perl $], $^X");
 
