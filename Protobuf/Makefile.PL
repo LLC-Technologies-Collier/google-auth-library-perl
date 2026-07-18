@@ -643,9 +643,16 @@ sub MY::postamble {
 	\$(NOECHO) \$(MKPATH) \$(INST_ARCHAUTODIR)
 	\$(CP) libprotobufperl.$ext \$(INST_ARCHAUTODIR)/libprotobufperl.$ext
 
+# Copy protoc-gen-perl-pb to blib/script so cpanm / make install installs it to PATH
+\$(INST_SCRIPT)/protoc-gen-perl-pb : $protoc_plugin_exe
+	\$(NOECHO) \$(MKPATH) \$(INST_SCRIPT)
+	\$(CP) $protoc_plugin_exe \$(INST_SCRIPT)/protoc-gen-perl-pb
+	\$(CHMOD) \$(PERM_RWX) \$(INST_SCRIPT)/protoc-gen-perl-pb
+
 # Ensure the copy and plugin build happen during standard make
 all :: \$(INST_ARCHAUTODIR)/libprotobufperl.$ext
-all :: $protoc_plugin_exe
+all :: \$(INST_SCRIPT)/protoc-gen-perl-pb
+
 
 EOF
 
