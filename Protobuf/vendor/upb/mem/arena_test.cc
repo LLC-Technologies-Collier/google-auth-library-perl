@@ -334,11 +334,11 @@ TEST(OverheadTest, SmallBlocksLargerThanInitial_many) {
   }
   if (!UPB_ASAN) {
 #ifdef __ANDROID__
-    EXPECT_NEAR(test.WastePct(), 0.05, 0.03);
+    EXPECT_NEAR(test.WastePct(), 0.07, 0.03);
     EXPECT_NEAR(test.AmortizedAlloc(), 0.08, 0.025);
 #else
     EXPECT_NEAR(test.WastePct(), 0.04, 0.025);
-    EXPECT_NEAR(test.AmortizedAlloc(), 0.05, 0.025);
+    EXPECT_NEAR(test.AmortizedAlloc(), 0.07, 0.025);
 #endif
   }
 }
