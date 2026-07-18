@@ -233,7 +233,7 @@ std::string PerlCodeGenerator::GenerateModule(
   ss << "use strict;\n";
   ss << "use warnings;\n\n";
 #ifndef PROTOBUF_PERL_VERSION
-#define PROTOBUF_PERL_VERSION "0.05"
+#define PROTOBUF_PERL_VERSION "0.07"
 #endif
   ss << "our $VERSION = '" << PROTOBUF_PERL_VERSION << "';\n\n";
 
