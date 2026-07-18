@@ -89,9 +89,14 @@ if ($is_dev) {
     system($perl, 'maint/generate_xs.pl') == 0 or die "Failed to run generate_xs.pl: $!";
 
     # 2. Update the local vendor directory with core components
-    if (-f 'maint/vendor_upb.pl') {
-        print "Updating vendor/ directory...\n";
-        system($perl, 'maint/vendor_upb.pl') == 0 or die "Failed to run vendor_upb.pl: $!";
+    unless (-f 'vendor/upb/mem/arena.h') {
+        print "vendor/upb headers missing. Rebuilding vendor/ directory...\n";
+        if (-f 'maint/vendor_upb.pl') {
+            system($perl, 'maint/vendor_upb.pl');
+        }
+        if (!-f 'vendor/upb/mem/arena.h') {
+            system('git', 'submodule', 'update', '--init', '--recursive');
+        }
     }
 
     # 3. Clean and regenerate MANIFEST from scratch to remove dead references
