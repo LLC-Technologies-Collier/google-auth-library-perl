@@ -11,7 +11,7 @@ use File::Spec;
 use File::Basename qw(basename);
 use File::Which qw(which);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 sub create_distro {
     my ($self, %args) = @_;
@@ -310,7 +310,7 @@ use Carp qw(croak);
 %s
 %s
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 has credentials => ( is => 'ro', required => 0 );
 has transport   => ( is => 'rw' );
@@ -409,7 +409,7 @@ use warnings;
 %s
 %s
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 1; # End of %s
 
 __END__

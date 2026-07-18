@@ -16,6 +16,8 @@ package Google::Cloud::BigQuery::Storage::V1;
 
 use strict;
 use warnings;
+
+our $VERSION = '0.02';
 use Moo;
 use Google::gRPC::Client;
 use Google::Auth;
