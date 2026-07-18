@@ -6,7 +6,7 @@ Protobuf::Descriptor::Enum - Descriptor for a Protocol Buffer enum
 
 =head1 VERSION
 
-version 0.08
+version 0.09
 
 =head1 SYNOPSIS
 
@@ -72,7 +72,7 @@ use strict;
 require Protobuf;
 use warnings;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 
 sub full_name {
