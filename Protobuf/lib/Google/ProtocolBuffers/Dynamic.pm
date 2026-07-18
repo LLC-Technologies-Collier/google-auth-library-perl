@@ -4,9 +4,9 @@ use strict;
 use warnings;
 use Protobuf;
 use Protobuf::DescriptorPool;
-use File::Basename qw(dirname);
+use File::Basename qw(dirname basename);
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 sub new {
     my ($class, %opts) = @_;
@@ -38,6 +38,22 @@ sub load_file {
 
     if (defined $bytes && length($bytes) > 0) {
         Protobuf::DescriptorPool->generated_pool->add_serialized_file_descriptor_set($bytes);
+        my $base = basename($file);
+        my $file_def = Protobuf::DescriptorPool->generated_pool->find_file_by_name($base)
+                    // Protobuf::DescriptorPool->generated_pool->find_file_by_name($file);
+        if ($file_def) {
+            require Protobuf::ClassGenerator;
+            my $proto_pkg = $file_def->get_package;
+            if (my $perl_pkg = $self->{package_map}{$proto_pkg}) {
+                my $count = $file_def->top_level_message_count;
+                for my $i (0 .. $count - 1) {
+                    my $mdef = $file_def->get_top_level_message($i);
+                    Protobuf::ClassGenerator::_generate_recursively($mdef, $perl_pkg);
+                }
+            } else {
+                Protobuf::ClassGenerator->generate_for_file($file_def);
+            }
+        }
         return 1;
     }
     die "protoc failed to generate binary descriptor set for '$file'";
@@ -58,13 +74,30 @@ sub load_string {
 }
 
 sub resolve_references {
-    my ($self) = @_;
     return 1;
 }
 
 sub map_package {
     my ($self, $proto_pkg, $perl_pkg, %opts) = @_;
     $self->{package_map}{$proto_pkg} = $perl_pkg;
+
+    my $pool = $self->{pool} // Protobuf::DescriptorPool->generated_pool;
+    for my $file_name (@{ $self->{files} }) {
+        my $base = basename($file_name);
+        my $file_def = $pool->find_file_by_name($base) // $pool->find_file_by_name($file_name);
+        if ($file_def) {
+            my $pkg1 = $file_def->get_package; $pkg1 =~ s/^\.//;
+            my $pkg2 = $proto_pkg; $pkg2 =~ s/^\.//;
+            if ($pkg1 eq $pkg2) {
+                my $count = $file_def->top_level_message_count;
+                require Protobuf::ClassGenerator;
+                for my $i (0 .. $count - 1) {
+                    my $mdef = $file_def->get_top_level_message($i);
+                    Protobuf::ClassGenerator::_generate_recursively($mdef, $perl_pkg);
+                }
+            }
+        }
+    }
     return 1;
 }
 
@@ -76,49 +109,48 @@ sub map_message {
 
 sub _resolve_class {
     my ($self, $type) = @_;
-    my $class;
     if (my $mapped = $self->{message_map}{$type}) {
-        $class = $mapped;
+        return $mapped;
     }
-    else {
-        for my $proto_pkg (keys %{ $self->{package_map} }) {
-            if ($type =~ /^ \Q$proto_pkg\E \. (.*) $/x) {
-                my $rest = $1;
-                my $perl_pkg = $self->{package_map}{$proto_pkg};
-                $class = "${perl_pkg}::${rest}";
-                $class =~ s/\./::/g;
-                last;
-            }
-        }
-        if (!$class) {
-            $class = $type;
+    for my $proto_pkg (keys %{ $self->{package_map} }) {
+        if ($type =~ /^\Q$proto_pkg\E\.(.*)$/) {
+            my $rest = $1;
+            my $perl_pkg = $self->{package_map}{$proto_pkg};
+            my $class = "${perl_pkg}::${rest}";
             $class =~ s/\./::/g;
+            if (!$class->can('new')) {
+                my $pool = $self->{pool} // Protobuf::DescriptorPool->generated_pool;
+                my $mdef = $pool->find_message_by_name($type) // $pool->find_message_by_name(".$type");
+                if ($mdef) {
+                    require Protobuf::ClassGenerator;
+                    Protobuf::ClassGenerator::_generate_recursively($mdef, $perl_pkg);
+                }
+            }
+            return $class;
         }
     }
-
-    unless ($class->can('new')) {
-        my $pool = Protobuf::DescriptorPool->generated_pool;
-        my $mdef = $pool->find_message_by_name($type) // $pool->find_message_by_name(".$type");
-        if ($mdef) {
-            require Protobuf::ClassGenerator;
-            Protobuf::ClassGenerator->generate_for_message($mdef, $class);
-        }
+    my $pool = $self->{pool} // Protobuf::DescriptorPool->generated_pool;
+    my $mdef = $pool->find_message_by_name($type) // $pool->find_message_by_name(".$type");
+    if ($mdef) {
+        require Protobuf::ClassGenerator;
+        return Protobuf::ClassGenerator->generate_for_message($mdef);
     }
-
+    my $class = $type;
+    $class =~ s/\./::/g;
     return $class;
 }
 
 sub encode {
     my ($self, $type, $data) = @_;
     my $class = $self->_resolve_class($type);
-    my $msg = ref $data eq $class ? $data : $class->new(%$data);
+    my $msg = (ref $data eq $class) ? $data : $class->new(%$data);
     return $msg->encode();
 }
 
 sub decode {
     my ($self, $type, $bytes) = @_;
     my $class = $self->_resolve_class($type);
-    return $class->decode($bytes);
+    return $class->parse($bytes);
 }
 
 sub encode_json {
@@ -135,3 +167,41 @@ sub decode_json {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+Google::ProtocolBuffers::Dynamic - Dynamic Protocol Buffers binding layer compatible with upb backend
+
+=head1 SYNOPSIS
+
+    use Google::ProtocolBuffers::Dynamic;
+
+    my $dynamic = Google::ProtocolBuffers::Dynamic->new();
+    $dynamic->load_file("person.proto");
+    $dynamic->map_package("foo.bar", "My::Perl::Package");
+
+    my $bytes = $dynamic->encode("My::Perl::Package::Person", { name => "Alice", id => 123 });
+    my $msg   = $dynamic->decode("My::Perl::Package::Person", $bytes);
+
+=head1 DESCRIPTION
+
+C<Google::ProtocolBuffers::Dynamic> provides a high-performance compatibility layer mapping
+dynamically parsed C<.proto> files directly into Perl classes via the UPB engine.
+
+=head1 SUPPORT AND BUG TRACKING
+
+Please report bugs or feature requests to the CPAN Bug Tracker at:
+
+L<https://rt.cpan.org/Dist/Display.html?Queue=Protobuf>
+
+=head1 AUTHOR
+
+C.J. Collier E<lt>cjac@colliertech.orgE<gt>
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2026 Google LLC. Apache License, Version 2.0.
+
+=cut
