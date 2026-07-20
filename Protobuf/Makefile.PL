@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 BEGIN {
     $ENV{PACKAGE_STASH_IMPLEMENTATION} ||= 'PP';
     $ENV{MOO_XS_DISABLE} ||= '1';
@@ -797,7 +797,19 @@ WriteMakefile(
             },
         },
         no_index => {
-            directory => [ 'xlib', 't', 'inc', 'local' ],
+            directory => [ 'xlib', 't', 'inc', 'local', 'lib/Google', 'lib/Conformance', 'lib/Protobuf_test_messages' ],
+            package   => [
+                'Google::ProtocolBuffers::Dynamic',
+                'Google::Protobuf',
+                'Google::Protobuf::Any',
+                'Google::Protobuf::Duration',
+                'Google::Protobuf::Timestamp',
+                'Google::Protobuf::FieldMask',
+                'Google::Protobuf::Struct',
+                'Google::Protobuf::Wrappers',
+                'Google::Protobuf::Empty',
+                'Conformance',
+            ],
         },
     },
     TEST_REQUIRES => {
