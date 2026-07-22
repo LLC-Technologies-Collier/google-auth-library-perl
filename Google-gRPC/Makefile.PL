@@ -7,19 +7,33 @@ my $has_nghttp2 = 0;
 my $pkg_config_cflags = '';
 my $pkg_config_libs = '';
 
+my @search_dirs = (
+    '/opt/homebrew/opt/nghttp2/include',
+    '/opt/homebrew/include',
+    '/usr/local/include',
+    '/usr/include',
+);
+
+for my $dir (@search_dirs) {
+    if (-f "$dir/nghttp2/nghttp2.h") {
+        $has_nghttp2 = 1;
+        $pkg_config_cflags = "-I$dir";
+        my $libdir = $dir;
+        $libdir =~ s/include$/lib/;
+        $pkg_config_libs = "-L$libdir -lnghttp2";
+        last;
+    }
+}
+
 my $pkg_check = `pkg-config --exists libnghttp2 2>/dev/null; echo $?`;
 chomp($pkg_check) if defined $pkg_check;
 
-if (defined $pkg_check && $pkg_check eq '0') {
+if (!$has_nghttp2 && defined $pkg_check && $pkg_check eq '0') {
     $has_nghttp2 = 1;
     $pkg_config_cflags = `pkg-config --cflags libnghttp2 2>/dev/null`;
     $pkg_config_libs   = `pkg-config --libs libnghttp2 2>/dev/null`;
     chomp($pkg_config_cflags) if defined $pkg_config_cflags;
     chomp($pkg_config_libs) if defined $pkg_config_libs;
-}
-elsif (-f '/usr/include/nghttp2/nghttp2.h' || -f '/usr/local/include/nghttp2/nghttp2.h') {
-    $has_nghttp2 = 1;
-    $pkg_config_libs = '-lnghttp2';
 }
 
 my %extra_params;
