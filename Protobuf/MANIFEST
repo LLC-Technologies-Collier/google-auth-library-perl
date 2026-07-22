@@ -91,6 +91,7 @@ maint/gen_build_bazel.pl
 maint/generate_xs.pl
 maint/prove-dash-jay.sh
 maint/prove-dash-vee.sh
+maint/release_lint.pl
 maint/vendor_upb.pl
 Makefile.PL
 MANIFEST			This list of files
