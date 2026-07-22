@@ -3,6 +3,17 @@
 all :: [% COMMON_LIB %]
 [% END %]
 
+[% BLOCK blib_libprotobufperl_copy %]
+# Make the shared library a dependency of the blib copy
+$(INST_ARCHAUTODIR)/libprotobufperl.[% ext %] : libprotobufperl.[% ext %]
+	$(NOECHO) $(MKPATH) $(INST_ARCHAUTODIR)
+	$(CP) libprotobufperl.[% ext %] $(INST_ARCHAUTODIR)/libprotobufperl.[% ext %]
+
+# Ensure the copy and plugin build happen during standard make
+all :: $(INST_ARCHAUTODIR)/libprotobufperl.[% ext %]
+all :: [% protoc_plugin_exe %]
+[% END %]
+
 [% BLOCK bazel_protoc_plugin %]
 BUILD.bazel: maint/gen_build_bazel.pl inc/templates/BUILD.bazel.tt inc/templates/bazel.tt
 	$(PERL) maint/gen_build_bazel.pl

@@ -98,8 +98,11 @@ sub build_package {
     $abs_arch =~ s/\//\\/g if $^O eq "MSWin32";
     $abs_cur =~ s/\//\\/g if $^O eq "MSWin32";
 
+    my $abs_pkg_arch = File::Spec->rel2abs("blib/arch/auto/$d");
     my $old_path = $ENV{PATH};
-    $ENV{PATH} = join($sep, $abs_arch, $abs_cur, @dll_dirs, $old_path);
+    $ENV{PATH} = join($sep, $abs_pkg_arch, $abs_arch, $abs_cur, @dll_dirs, $old_path);
+    local $ENV{LD_LIBRARY_PATH} = join(':', $abs_pkg_arch, $abs_arch, $abs_cur, $ENV{LD_LIBRARY_PATH} || ());
+    local $ENV{DYLD_LIBRARY_PATH} = join(':', $abs_pkg_arch, $abs_arch, $abs_cur, $ENV{DYLD_LIBRARY_PATH} || ());
     my $top_abs = File::Spec->rel2abs($top_dir);
     my @libs = (
         File::Spec->rel2abs('blib/lib'),
@@ -123,6 +126,7 @@ sub build_package {
     if ($^O eq 'MSWin32') {
         s{\\}{/}g for @libs;
     }
+    local $ENV{PROTOBUF_DEBUG} = 1;
     local $ENV{PERL5LIB} = join($sep, @libs, $ENV{PERL5LIB} || ());
     my $res = system($^X, '-S', 'prove', '-b', '-It/lib', 't/');
     $ENV{PATH} = $old_path;
