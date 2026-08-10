@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -e
+
+echo "=== [Git Hook] Running pre-commit test suite in base container (google-cloud-perl-ci-debian) ==="
+
+CHANGED_DIRS=""
+for d in $(git diff --name-only --cached | awk -F/ '{if (NF > 1) print $1}' | sort -u); do
+    if [ -f "$d/Makefile.PL" ]; then
+        CHANGED_DIRS="$CHANGED_DIRS $d"
+    fi
+done
+
+if [ -z "$CHANGED_DIRS" ]; then
+    echo "No package directories changed. Skipping tests."
+    exit 0
+fi
+
+CORE_DIRS="Protobuf Google-Auth Google-Api-Common Google-gRPC"
+UNIQUE_DIRS=""
+for d in $CORE_DIRS $CHANGED_DIRS; do
+    if [[ ! " $UNIQUE_DIRS " =~ " $d " ]]; then
+        UNIQUE_DIRS="$UNIQUE_DIRS $d"
+    fi
+done
+
+# Check for unstaged changes or untracked files in selected directories
+for d in $CHANGED_DIRS; do
+    UNSTAGED=$(git status --porcelain -- "$d" | grep -E '^.[^ ]' || true)
+    if [ -n "$UNSTAGED" ]; then
+        echo "=== [Git Hook] FATAL: Unstaged changes or untracked files detected in staged directory '$d' ==="
+        echo "$UNSTAGED"
+        echo "Please stage or revert these changes, or add untracked files to .gitignore before committing."
+        exit 1
+    fi
+done
+
+ENGINE=""
+if command -v podman >/dev/null 2>&1; then
+    ENGINE="podman"
+elif command -v docker >/dev/null 2>&1; then
+    ENGINE="docker"
+fi
+
+if [ -n "$ENGINE" ]; then
+    IMAGE="us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-debian:latest"
+
+    git archive $(git write-tree) | $ENGINE run --rm -i "$IMAGE" bash -c \
+        "mkdir -p /tmp/work && tar -xf - -C /tmp/work && cd /tmp/work && CI_SKIP_DEPS=1 perl .github/scripts/build_and_test.pl $UNIQUE_DIRS"
+else
+    echo "No container engine (podman/docker) found. Falling back to host perl environment..."
+    CI_SKIP_DEPS=1 perl .github/scripts/build_and_test.pl $UNIQUE_DIRS
+fi
+
+echo "=== [Git Hook] Pre-commit base container test suite PASSED ==="

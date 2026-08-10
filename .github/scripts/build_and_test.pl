@@ -64,6 +64,7 @@ eval {
 
 my @all_known_dirs = qw(
     Protobuf Google-Auth Google-Api-Common Google-gRPC Module-Starter-Protobuf
+    Google-Ai-Generativelanguage-V1beta
     Google-Cloud-Bigquery-Storage-V1 Google-Cloud-Bigquery-V2 Google-Cloud-Build-V1
     Google-Cloud-Composer-V1 Google-Cloud-Compute-V1 Google-Cloud-Dataflow-V1beta3
     Google-Cloud-Datafusion-V1 Google-Cloud-Dataplex-V1 Google-Cloud-Dataproc-V1
@@ -195,7 +196,7 @@ sub build_package {
         require File::Copy;
         File::Copy::copy('MYMETA.yml', 'META.yml');
     }
-    my @prove_args = ('-b', '-It/lib');
+    my @prove_args = ('-b', '-v', '-It/lib');
     push @prove_args, $j_flag if $j_flag;
     my $res = system($^X, '-S', 'prove', @prove_args, @test_dirs);
     $ENV{PATH} = $old_path;

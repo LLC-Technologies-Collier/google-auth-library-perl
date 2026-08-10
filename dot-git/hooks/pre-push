@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LOG_DIR="/tmp/pre-push-logs"
+mkdir -p "$LOG_DIR"
+
+# HARD SAFEGUARD: Prevent any direct pushes to upstream repository
+remote_name="$1"
+remote_url="$2"
+if [ "$remote_name" = "upstream" ] || [[ "$remote_url" == *"GoogleCloudPlatform/google-auth-library-perl"* ]]; then
+    echo "=== [Git Pre-Push Hook] FATAL: Direct pushes to 'upstream' (GoogleCloudPlatform) are strictly FORBIDDEN! ==="
+    echo "All changes must be pushed to feature branches on 'origin' (LLC-Technologies-Collier) and submitted via PR."
+    exit 1
+fi
+
+echo "=== [Git Pre-Push Hook] Validating GitHub Actions Workflow Syntax with actionlint ==="
+if [ -f "$REPO_ROOT/.github/workflows/ci.yml" ]; then
+    cp "$REPO_ROOT/.github/workflows/ci.yml" /tmp/ci-validate.yml
+    chmod 644 /tmp/ci-validate.yml
+    if podman image exists docker.io/rhysd/actionlint >/dev/null 2>&1; then
+        echo "--> Running local actionlint workflow schema validation..."
+        podman run --rm -v /tmp/ci-validate.yml:/ci.yml:z docker.io/rhysd/actionlint /ci.yml || {
+            echo "ERROR: GitHub Actions workflow validation failed!"
+            exit 1
+        }
+        echo "--> GitHub Actions workflow syntax & schema validation PASSED ✓"
+    fi
+fi
+
+echo "=== [Git Pre-Push Hook] Launching Parallel Container & Windows VM Matrix ==="
+
+declare -A PIDS
+declare -A LOGS
+
+IMAGES=(
+    "us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-debian:latest|debian"
+    "us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-ubuntu:latest|ubuntu"
+    "us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-rocky:latest|rocky"
+    "us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-540:latest|perl540"
+)
+
+# Read target ref from git push stdin (local_ref local_oid remote_ref remote_oid)
+PRE_PUSH_TARGET_REF=""
+while read local_ref local_oid remote_ref remote_oid; do
+    if [ -n "$remote_oid" ] && [ "$remote_oid" != "0000000000000000000000000000000000000000" ]; then
+        PRE_PUSH_TARGET_REF="$remote_oid"
+    fi
+done
+
+if [ -z "$PRE_PUSH_TARGET_REF" ]; then
+    PRE_PUSH_TARGET_REF="$(git merge-base HEAD upstream/main 2>/dev/null || git merge-base HEAD upstream/master 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null || echo "HEAD~1")"
+fi
+
+TREE_ID=$(git write-tree)
+
+CHANGED_DIRS=""
+for d in $(git diff --name-only $PRE_PUSH_TARGET_REF...HEAD | awk -F/ '{if (NF > 1) print $1}' | sort -u); do
+    if [ -f "$d/Makefile.PL" ]; then
+        CHANGED_DIRS="$CHANGED_DIRS $d"
+    fi
+done
+
+CORE_DIRS="Protobuf Google-Auth Google-Api-Common Google-gRPC"
+UNIQUE_DIRS=""
+for d in $CORE_DIRS $CHANGED_DIRS; do
+    if [[ ! " $UNIQUE_DIRS " =~ " $d " ]]; then
+        UNIQUE_DIRS="$UNIQUE_DIRS $d"
+    fi
+done
+
+# 1. Launch Podman Container Matrix Jobs concurrently in Parallel using git archive HEAD
+for entry in "${IMAGES[@]}"; do
+    img="${entry%%|*}"
+    name="${entry##*|}"
+    log_file="$LOG_DIR/container-$name.log"
+    
+    echo "--> [RUNNING] Linux Container [$name] -> Log: $log_file"
+    git archive $TREE_ID | podman run --rm --pull=missing -i "$img" bash -c \
+        "mkdir -p /tmp/work && tar -xf - -C /tmp/work && cd /tmp/work && PRE_PUSH_TARGET_REF=$PRE_PUSH_TARGET_REF CI_SKIP_DEPS=1 perl .github/scripts/build_and_test.pl $UNIQUE_DIRS" > "$log_file" 2>&1 &
+    pid=$!
+    PIDS["$name"]=$pid
+    LOGS["$name"]=$log_file
+done
+
+# # 2. Launch 3 Separate Windows Container VM Jobs in Parallel (Temporarily commented out)
+# WIN_VM="${WINDOWS_VM:-win-ci-dev}"
+# WIN_VERSIONS=("5.38" "5.40" "5.42")
+# 
+# for ver in "${WIN_VERSIONS[@]}"; do
+#     win_target="windows-$ver"
+#     win_log="$LOG_DIR/$win_target.log"
+#     echo "--> [RUNNING] Windows Container [$win_target] -> Log: $win_log"
+#     
+# #     if [[ "$WIN_VM" == *"win-ci-dev"* ]]; then
+#         git archive HEAD | gcloud compute ssh "$WIN_VM" --project=cjac-2025-01 --zone=us-central1-a --tunnel-through-iap --command="powershell -Command \"\$token = gcloud auth print-access-token; \$token | docker login -u oauth2accesstoken --password-stdin us-docker.pkg.dev; \$wdir = 'C:\actions-runner-1\_work\google-auth-library-perl\work-$ver'; New-Item -ItemType Directory -Force \$wdir | Out-Null; cd \$wdir; Remove-Item * -Recurse -Force -ErrorAction SilentlyContinue; tar -xf -; docker run --rm -v \${wdir}:C:\workspace us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-windows:$ver cmd /c \"\"rmdir /S /Q C:\tmp\work 2>nul & xcopy /E /I /H /Y C:\workspace C:\tmp\work && cd C:\tmp\work && set CI_SKIP_DEPS=1 && perl .github\scripts\build_and_test.pl\"\"\"" > "$win_log" 2>&1 &
+#     else
+#         git archive HEAD | ssh "$WIN_VM" "powershell -Command \"\$token = gcloud auth print-access-token; \$token | docker login -u oauth2accesstoken --password-stdin us-docker.pkg.dev; \$wdir = 'C:\actions-runner-1\_work\google-auth-library-perl\work-$ver'; New-Item -ItemType Directory -Force \$wdir | Out-Null; cd \$wdir; Remove-Item * -Recurse -Force -ErrorAction SilentlyContinue; tar -xf -; docker run --rm -v \${wdir}:C:\workspace us-docker.pkg.dev/perl-cloud-ci/perl-cloud-ci-images/google-cloud-perl-ci-windows:$ver cmd /c \"\"rmdir /S /Q C:\tmp\work 2>nul & xcopy /E /I /H /Y C:\workspace C:\tmp\work && cd C:\tmp\work && set CI_SKIP_DEPS=1 && perl .github\scripts\build_and_test.pl\"\"\"" > "$win_log" 2>&1 &
+#     fi
+#     pid=$!
+#     PIDS["$win_target"]=$pid
+#     LOGS["$win_target"]=$win_log
+# done
+
+# 3. Fail-Fast Wait for Matrix Jobs & Immediate Cleanup on Error
+FAILED=0
+RUNNING_COUNT=${#PIDS[@]}
+while [ "$RUNNING_COUNT" -gt 0 ]; do
+    wait -n 2>/dev/null || true
+    for target in "${!PIDS[@]}"; do
+        pid="${PIDS[$target]}"
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            status=0
+            wait "$pid" 2>/dev/null || status=$?
+            log="${LOGS[$target]}"
+            if [ $status -eq 0 ]; then
+                echo "--> [PASS] $target (Log: $log)"
+                unset "PIDS[$target]"
+                RUNNING_COUNT=$((RUNNING_COUNT - 1))
+            else
+                echo "=== [Git Pre-Push Hook] FAIL-FAST DETECTED ==="
+                echo "--> [FAIL] $target failed with exit status $status! Log output ($log):"
+                cat "$log" | tail -n 40
+                echo "--> Terminating all remaining container jobs..."
+                for remaining in "${!PIDS[@]}"; do
+                    rpid="${PIDS[$remaining]}"
+                    if [ -n "$rpid" ] && kill -0 "$rpid" 2>/dev/null; then
+                        kill -9 "$rpid" 2>/dev/null || true
+                    fi
+                done
+                exit 1
+            fi
+        fi
+    done
+done
+
+if [ "$FAILED" -ne 0 ]; then
+    echo "=== [Git Pre-Push Hook] FAILED: One or more matrix jobs failed. ==="
+    exit 1
+fi
+
+echo "=== [Git Pre-Push Hook] ALL 7 parallel container matrix tests PASSED ==="

@@ -65,6 +65,14 @@ To set up your development environment:
     # From the google-auth-library-perl/protobuf/perl/ directory
     cpanm --installdeps .
     ```
+5.  Set up Git hooks for validation (Pre-commit & Pre-push):
+    ```bash
+    # Recommended: Direct Git to use the tracked hooks directory
+    git config core.hooksPath dot-git/hooks
+    
+    # Alternative: Copy hooks manually (ensure execution permissions are preserved)
+    # cp -rp dot-git/hooks/* .git/hooks/
+    ```
 
 ## Code Style
 
