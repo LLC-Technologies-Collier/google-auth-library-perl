@@ -22,6 +22,8 @@ use JSON::PP;
 use MIME::Base64 qw(decode_base64);
 use Digest::SHA  qw(hmac_sha256 hmac_sha256_hex sha256_hex);
 
+# plan tests => 12; # Let done_testing handle it
+
 BEGIN {
   use_ok('Google::Auth::ExternalAccountCredentials') || print "Bail out!\n";
 }
@@ -383,7 +385,8 @@ subtest 'AWS WIF Dynamic Region Resolution from Availability Zone' => sub {
     qr/us-west-2/, 'Authorization scope contains derived region');
 };
 
-subtest 'AWS WIF Negative Security Tests - Relative URI User-Info Injection' => sub {
+subtest 'AWS WIF Negative Security Tests - Relative URI User-Info Injection' =>
+  sub {
   local %ENV = %ENV;
   delete $ENV{'AWS_ACCESS_KEY_ID'};
   delete $ENV{'AWS_SECRET_ACCESS_KEY'};
@@ -395,7 +398,7 @@ subtest 'AWS WIF Negative Security Tests - Relative URI User-Info Injection' => 
 '//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/my-pool/providers/my-provider',
     subject_token_type => 'urn:ietf:params:aws:token-type:aws4_request',
     token_url          => 'https://sts.googleapis.com/v1/token',
-    credential_source  => { environment_id => 'aws1' },
+    credential_source  => {environment_id => 'aws1'},
   );
 
   eval { $creds->retrieve_subject_token(); };
@@ -404,22 +407,25 @@ subtest 'AWS WIF Negative Security Tests - Relative URI User-Info Injection' => 
     qr/Invalid AWS_CONTAINER_CREDENTIALS_RELATIVE_URI format/,
     'throws security exception on relative URI User-Info injection'
   );
-};
+  };
 
-subtest 'AWS WIF Negative Security Tests - Disallowed Host in Container Task Full URI' => sub {
+subtest
+  'AWS WIF Negative Security Tests - Disallowed Host in Container Task Full URI'
+  => sub {
   local %ENV = %ENV;
   delete $ENV{'AWS_ACCESS_KEY_ID'};
   delete $ENV{'AWS_SECRET_ACCESS_KEY'};
   delete $ENV{'AWS_SESSION_TOKEN'};
   delete $ENV{'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'};
-  $ENV{'AWS_CONTAINER_CREDENTIALS_FULL_URI'} = 'http://untrusted-host.com/creds';
+  $ENV{'AWS_CONTAINER_CREDENTIALS_FULL_URI'} =
+    'http://untrusted-host.com/creds';
 
   my $creds = Google::Auth::ExternalAccountCredentials->make_creds(
     audience =>
 '//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/my-pool/providers/my-provider',
     subject_token_type => 'urn:ietf:params:aws:token-type:aws4_request',
     token_url          => 'https://sts.googleapis.com/v1/token',
-    credential_source  => { environment_id => 'aws1' },
+    credential_source  => {environment_id => 'aws1'},
   );
 
   eval { $creds->retrieve_subject_token(); };
@@ -428,9 +434,93 @@ subtest 'AWS WIF Negative Security Tests - Disallowed Host in Container Task Ful
     qr/carries security violation/,
     'throws security exception on non-loopback host in Full URI'
   );
-};
+  };
 
-subtest 'AWS WIF Edge-Case Tests - Invalid Derived AZ Region Format Fallback' => sub {
+subtest
+'AWS WIF Negative Security Tests - Disallowed Scheme in Container Task Full URI'
+  => sub {
+  local %ENV = %ENV;
+  delete $ENV{'AWS_ACCESS_KEY_ID'};
+  delete $ENV{'AWS_SECRET_ACCESS_KEY'};
+  delete $ENV{'AWS_SESSION_TOKEN'};
+  delete $ENV{'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'};
+  $ENV{'AWS_CONTAINER_CREDENTIALS_FULL_URI'} = 'file://localhost/etc/passwd';
+
+  my $creds = Google::Auth::ExternalAccountCredentials->make_creds(
+    audience =>
+'//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/my-pool/providers/my-provider',
+    subject_token_type => 'urn:ietf:params:aws:token-type:aws4_request',
+    token_url          => 'https://sts.googleapis.com/v1/token',
+    credential_source  => {environment_id => 'aws1'},
+  );
+
+  my $result = eval { $creds->retrieve_subject_token(); };
+  my $err    = $@;
+  like(
+    $err,
+    qr/carries security violation/,
+    'throws security exception on non-http scheme in Full URI'
+  );
+  };
+
+subtest 'AWS WIF Container Task Credentials (IPv6 and Case Insensitivity)' =>
+  sub {
+  local %ENV = %ENV;
+  delete $ENV{'AWS_ACCESS_KEY_ID'};
+  delete $ENV{'AWS_SECRET_ACCESS_KEY'};
+  delete $ENV{'AWS_SESSION_TOKEN'};
+  delete $ENV{'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'};
+
+  # Test IPv6
+  $ENV{'AWS_CONTAINER_CREDENTIALS_FULL_URI'} = 'http://[::1]:8080/credentials';
+
+  my $mock_ua = Test::LWP::UserAgent->new();
+  $mock_ua->map_response(
+    sub {
+      my ($request) = @_;
+      return $request->uri eq 'http://[::1]:8080/credentials';
+    },
+    HTTP::Response->new(
+      200, 'OK',
+      ['Content-Type' => 'application/json'],
+      encode_json({
+          AccessKeyId     => 'ipv6_key',
+          SecretAccessKey => 'ipv6_secret',
+          Token           => 'ipv6_token',
+        })));
+
+  my $creds = Google::Auth::ExternalAccountCredentials->make_creds(
+    audience           => '//iam.googleapis.com/foo',
+    subject_token_type => 'urn:ietf:params:aws:token-type:aws4_request',
+    token_url          => 'https://sts.googleapis.com/v1/token',
+    credential_source  => {environment_id => 'aws1'},
+    ua                 => $mock_ua,
+  );
+
+  my $subject_token = $creds->retrieve_subject_token();
+  ok(defined $subject_token, 'subject token generated from IPv6 Full URI');
+
+  # Test Case Insensitivity
+  $ENV{'AWS_CONTAINER_CREDENTIALS_FULL_URI'} =
+    'http://LocalHost:8080/credentials';
+  $mock_ua->map_response(
+    qr{http://LocalHost:8080/credentials}i,    # Case insensitive regex for mock
+    HTTP::Response->new(
+      200, 'OK',
+      ['Content-Type' => 'application/json'],
+      encode_json({
+          AccessKeyId     => 'case_key',
+          SecretAccessKey => 'case_secret',
+          Token           => 'case_token',
+        })));
+
+  $subject_token = $creds->retrieve_subject_token();
+  ok(defined $subject_token,
+    'subject token generated from mixed-case Full URI');
+  };
+
+subtest
+  'AWS WIF Edge-Case Tests - Invalid Derived AZ Region Format Fallback' => sub {
   local %ENV = %ENV;
   $ENV{'AWS_ACCESS_KEY_ID'}     = 'reg_key';
   $ENV{'AWS_SECRET_ACCESS_KEY'} = 'reg_sec';
@@ -449,22 +539,29 @@ subtest 'AWS WIF Edge-Case Tests - Invalid Derived AZ Region Format Fallback' =>
     token_url          => 'https://sts.googleapis.com/v1/token',
     credential_source  => {
       environment_id => 'aws1',
-      region_url     => 'http://169.254.169.254/latest/meta-data/placement/availability-zone',
+      region_url     =>
+        'http://169.254.169.254/latest/meta-data/placement/availability-zone',
     },
     ua => $mock_ua,
   );
 
   my $subject_token = $creds->retrieve_subject_token();
-  ok(defined $subject_token, 'subject token generated with fallback us-east-1 region');
+  ok(defined $subject_token,
+    'subject token generated with fallback us-east-1 region');
 
   my $decoded_json = decode_base64($subject_token);
   my $req_obj      = decode_json($decoded_json);
-  my %header_map = map { $_->{'key'} => $_->{'value'} } @{$req_obj->{'headers'}};
+  my %header_map =
+    map { $_->{'key'} => $_->{'value'} } @{$req_obj->{'headers'}};
 
-  like($header_map{'Authorization'}, qr/us-east-1/, 'Authorization falls back to us-east-1 on malformed AZ string');
-};
+  like($header_map{'Authorization'},
+    qr/us-east-1/,
+    'Authorization falls back to us-east-1 on malformed AZ string');
+  };
 
-subtest 'AWS WIF Edge-Case Tests - Empty AWS_REGION Env Var Fallback to AWS_DEFAULT_REGION' => sub {
+subtest
+'AWS WIF Edge-Case Tests - Empty AWS_REGION Env Var Fallback to AWS_DEFAULT_REGION'
+  => sub {
   local %ENV = %ENV;
   $ENV{'AWS_ACCESS_KEY_ID'}     = 'reg_key';
   $ENV{'AWS_SECRET_ACCESS_KEY'} = 'reg_sec';
@@ -476,7 +573,7 @@ subtest 'AWS WIF Edge-Case Tests - Empty AWS_REGION Env Var Fallback to AWS_DEFA
 '//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/my-pool/providers/my-provider',
     subject_token_type => 'urn:ietf:params:aws:token-type:aws4_request',
     token_url          => 'https://sts.googleapis.com/v1/token',
-    credential_source  => { environment_id => 'aws1' },
+    credential_source  => {environment_id => 'aws1'},
   );
 
   my $subject_token = $creds->retrieve_subject_token();
@@ -484,9 +581,12 @@ subtest 'AWS WIF Edge-Case Tests - Empty AWS_REGION Env Var Fallback to AWS_DEFA
 
   my $decoded_json = decode_base64($subject_token);
   my $req_obj      = decode_json($decoded_json);
-  my %header_map = map { $_->{'key'} => $_->{'value'} } @{$req_obj->{'headers'}};
+  my %header_map =
+    map { $_->{'key'} => $_->{'value'} } @{$req_obj->{'headers'}};
 
-  like($header_map{'Authorization'}, qr/eu-central-1/, 'Empty AWS_REGION correctly falls back to AWS_DEFAULT_REGION');
-};
+  like($header_map{'Authorization'},
+    qr/eu-central-1/,
+    'Empty AWS_REGION correctly falls back to AWS_DEFAULT_REGION');
+  };
 
 done_testing();

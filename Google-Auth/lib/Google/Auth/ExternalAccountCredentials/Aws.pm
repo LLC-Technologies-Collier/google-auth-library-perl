@@ -76,21 +76,48 @@ sub _get_aws_security_credentials {
   if (defined $rel_uri && length $rel_uri) {
     # Defense-in-depth: Validate relative URI starts with single slash and contains no userinfo '@', double slashes, or path traversal
     unless ($rel_uri =~ m{^/[^@]+$} && $rel_uri !~ m{//|\.\.}) {
-      $log->errorf('Security violation: Invalid AWS_CONTAINER_CREDENTIALS_RELATIVE_URI format: %s', $rel_uri);
-      Google::Auth::Error->throw("Invalid AWS_CONTAINER_CREDENTIALS_RELATIVE_URI format: $rel_uri");
+      $log->errorf(
+'Security violation: Invalid AWS_CONTAINER_CREDENTIALS_RELATIVE_URI format: %s',
+        $rel_uri
+      );
+      Google::Auth::Error->throw(
+        "Invalid AWS_CONTAINER_CREDENTIALS_RELATIVE_URI format: $rel_uri");
     }
     $container_uri = 'http://169.254.170.2' . $rel_uri;
   } elsif (defined $full_uri && length $full_uri) {
     my $uri_obj = URI->new($full_uri);
-    my $host    = $uri_obj->host // '';
+    my $scheme  = lc($uri_obj->scheme // '');
+    my $host    = lc($uri_obj->host   // '');
+
+    $log->debugf("Validating FULL_URI: %s (Scheme: %s, Host: %s)",
+      $full_uri, $scheme, $host);
+
+    # Enforce allowed schemes
+    unless ($scheme eq 'http' || $scheme eq 'https') {
+      $log->errorf(
+'Security violation: AWS_CONTAINER_CREDENTIALS_FULL_URI scheme %s is not permitted',
+        $scheme
+      );
+      Google::Auth::Error->throw(
+"AWS_CONTAINER_CREDENTIALS_FULL_URI scheme $scheme carries security violation"
+      );
+    }
+
     # Enforce allowed loopback / link-local container host allowlist per AWS SDK specifications
+    $host =~ s/^[\[\s]+|[\]\s]+$//g;    # Trim brackets and spaces
+
     unless ($host eq '127.0.0.1'
       || $host eq 'localhost'
-      || $host eq '[::1]'
+      || $host eq '::1'
       || $host eq '169.254.170.2')
     {
-      $log->errorf('Security violation: AWS_CONTAINER_CREDENTIALS_FULL_URI host %s is not permitted', $host);
-      Google::Auth::Error->throw("AWS_CONTAINER_CREDENTIALS_FULL_URI host $host carries security violation");
+      $log->errorf(
+'Security violation: AWS_CONTAINER_CREDENTIALS_FULL_URI host %s is not permitted',
+        $host
+      );
+      Google::Auth::Error->throw(
+"AWS_CONTAINER_CREDENTIALS_FULL_URI host $host carries security violation"
+      );
     }
     $container_uri = $full_uri;
   }
@@ -98,8 +125,9 @@ sub _get_aws_security_credentials {
   if ($container_uri) {
     $log->debugf('Fetching AWS container task credentials from: %s',
       $container_uri);
-    my $req = HTTP::Request->new(GET => $container_uri);
-    if (my $auth_token = $ENV{AWS_CONTAINER_AUTHORIZATION_TOKEN}) {
+    my $req        = HTTP::Request->new(GET => $container_uri);
+    my $auth_token = $ENV{AWS_CONTAINER_AUTHORIZATION_TOKEN};
+    if (defined $auth_token && length $auth_token) {
       $req->header(Authorization => $auth_token);
     }
 
@@ -181,7 +209,8 @@ sub _get_aws_region {
   my $region;
   if (defined $ENV{AWS_REGION} && length $ENV{AWS_REGION}) {
     $region = $ENV{AWS_REGION};
-  } elsif (defined $ENV{AWS_DEFAULT_REGION} && length $ENV{AWS_DEFAULT_REGION}) {
+  } elsif (defined $ENV{AWS_DEFAULT_REGION} && length $ENV{AWS_DEFAULT_REGION})
+  {
     $region = $ENV{AWS_DEFAULT_REGION};
   }
   if (defined $region && length $region) {
@@ -212,8 +241,10 @@ sub _get_aws_region {
             $az, $derived_region);
           return $derived_region;
         } else {
-          $log->warnf('Metadata AZ response (%s) produced invalid region format (%s), falling back to us-east-1',
-            $az, $derived_region);
+          $log->warnf(
+'Metadata AZ response (%s) produced invalid region format (%s), falling back to us-east-1',
+            $az, $derived_region
+          );
         }
       }
     }
