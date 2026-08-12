@@ -48,14 +48,14 @@ while read local_ref local_oid remote_ref remote_oid; do
     fi
 done
 
-if [ -z "$PRE_PUSH_TARGET_REF" ]; then
-    PRE_PUSH_TARGET_REF="$(git merge-base HEAD upstream/main 2>/dev/null || git merge-base HEAD upstream/master 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null || echo "HEAD~1")"
-fi
+# Always use the merge base with upstream/main as the reference for delta detection
+# to avoid testing unrelated packages brought in via rebase.
+MERGE_BASE="$(git merge-base HEAD upstream/main 2>/dev/null || git merge-base HEAD upstream/master 2>/dev/null || git merge-base HEAD origin/main 2>/dev/null || echo "HEAD~1")"
 
 TREE_ID=$(git write-tree)
 
 CHANGED_DIRS=""
-for d in $(git diff --name-only $PRE_PUSH_TARGET_REF...HEAD | awk -F/ '{if (NF > 1) print $1}' | sort -u); do
+for d in $(git diff --name-only $MERGE_BASE...HEAD | awk -F/ '{if (NF > 1) print $1}' | sort -u); do
     if [ -f "$d/Makefile.PL" ]; then
         CHANGED_DIRS="$CHANGED_DIRS $d"
     fi
@@ -77,7 +77,7 @@ for entry in "${IMAGES[@]}"; do
     
     echo "--> [RUNNING] Linux Container [$name] -> Log: $log_file"
     git archive $TREE_ID | podman run --rm --pull=missing -i "$img" bash -c \
-        "mkdir -p /tmp/work && tar -xf - -C /tmp/work && cd /tmp/work && PRE_PUSH_TARGET_REF=$PRE_PUSH_TARGET_REF CI_SKIP_DEPS=1 perl .github/scripts/build_and_test.pl $UNIQUE_DIRS" > "$log_file" 2>&1 &
+        "mkdir -p /tmp/work && tar -xf - -C /tmp/work && cd /tmp/work && PRE_PUSH_TARGET_REF=$MERGE_BASE CI_SKIP_DEPS=1 perl .github/scripts/build_and_test.pl $UNIQUE_DIRS" > "$log_file" 2>&1 &
     pid=$!
     PIDS["$name"]=$pid
     LOGS["$name"]=$log_file
