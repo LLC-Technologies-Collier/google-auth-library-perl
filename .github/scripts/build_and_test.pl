@@ -162,33 +162,11 @@ sub build_package {
     $ENV{PATH} = join($sep, $abs_pkg_arch, $abs_arch, $abs_cur, @dll_dirs, $old_path);
     local $ENV{LD_LIBRARY_PATH} = join(':', $abs_pkg_arch, $abs_arch, $abs_cur, $ENV{LD_LIBRARY_PATH} || ());
     local $ENV{DYLD_LIBRARY_PATH} = join(':', $abs_pkg_arch, $abs_arch, $abs_cur, $ENV{DYLD_LIBRARY_PATH} || ());
-    my $top_abs = File::Spec->rel2abs($top_dir);
-    my @libs = (
-        File::Spec->rel2abs('blib/lib'),
-        File::Spec->rel2abs('blib/arch'),
-        File::Spec->rel2abs('t/lib'),
-        File::Spec->catdir($top_abs, 'local', 'lib', 'perl5'),
-        File::Spec->catdir($top_abs, 'local', 'lib', 'perl5', $Config{archname}),
-        File::Spec->catdir($top_abs, 'Protobuf', 'blib', 'lib'),
-        File::Spec->catdir($top_abs, 'Protobuf', 'blib', 'arch'),
-        File::Spec->catdir($top_abs, 'Google-Api-Common', 'blib', 'lib'),
-        File::Spec->catdir($top_abs, 'Google-Api-Common', 'blib', 'arch'),
-        File::Spec->catdir($top_abs, 'Google-Auth', 'blib', 'lib'),
-        File::Spec->catdir($top_abs, 'Google-Auth', 'blib', 'arch'),
-        File::Spec->catdir($top_abs, 'Google-gRPC', 'blib', 'lib'),
-        File::Spec->catdir($top_abs, 'Google-gRPC', 'blib', 'arch'),
-        File::Spec->catdir($top_abs, 'Module-Starter-Protobuf', 'blib', 'lib'),
-        File::Spec->catdir($top_abs, 'Module-Starter-Protobuf', 'blib', 'arch'),
-        File::Spec->rel2abs('local/lib/perl5'),
-        File::Spec->rel2abs('../local/lib/perl5')
-    );
-    if ($^O eq 'MSWin32') {
-        s{\\}{/}g for @libs;
-    }
+
     local $ENV{PROTOBUF_DEBUG} = 1;
     local $ENV{RELEASE_TESTING} = 1;
     local $ENV{AUTHOR_TESTING} = 1;
-    local $ENV{PERL5LIB} = join($sep, @libs, $ENV{PERL5LIB} || ());
+
     my @test_dirs = ('t/');
     push @test_dirs, 'xt/' if -d 'xt';
     
