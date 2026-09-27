@@ -118,6 +118,11 @@ sub call {
             push @headers, 'authorization: Bearer ' . $self->auth_token;
         }
 
+        if ($ENV{GOOGLE_CLOUD_QUOTA_PROJECT}) {
+            push @headers, 'x-goog-user-project: ' . $ENV{GOOGLE_CLOUD_QUOTA_PROJECT};
+        }
+
+
         if (defined $timeout_val) {
             my $sec = Google::gRPC::Deadline::parse_timeout($timeout_val);
             if (defined $sec) {
