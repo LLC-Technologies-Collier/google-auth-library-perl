@@ -2,7 +2,6 @@ Changes
 ignore.txt
 lib/Google/Api/Annotations.pm
 lib/Google/Api/Annotations/Types.pm
-lib/Google/Api/Auditing.pm
 lib/Google/Api/Auth.pm
 lib/Google/Api/Auth/Types.pm
 lib/Google/Api/Backend.pm
@@ -36,7 +35,6 @@ lib/Google/Api/Http.pm
 lib/Google/Api/Http/Types.pm
 lib/Google/Api/Httpbody.pm
 lib/Google/Api/Httpbody/Types.pm
-lib/Google/Api/Inclusion.pm
 lib/Google/Api/Label.pm
 lib/Google/Api/Label/Types.pm
 lib/Google/Api/LaunchStage.pm
@@ -47,7 +45,6 @@ lib/Google/Api/Logging.pm
 lib/Google/Api/Logging/Types.pm
 lib/Google/Api/Metric.pm
 lib/Google/Api/Metric/Types.pm
-lib/Google/Api/Migration.pm
 lib/Google/Api/MonitoredResource.pm
 lib/Google/Api/MonitoredResource/Types.pm
 lib/Google/Api/Monitoring.pm
