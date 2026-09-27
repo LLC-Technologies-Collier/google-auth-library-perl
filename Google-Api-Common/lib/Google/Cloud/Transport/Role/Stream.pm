@@ -14,10 +14,6 @@ requires 'write';
 # Close the stream for writing
 requires 'close_write';
 
-# Read data from the stream
-# @returns: A Future resolving to the next chunk (raw bytes) or undef on EOF
-requires 'read';
-
 # Get stream metadata (Headers/Trailers)
 # @param $type: 'headers' or 'trailers'
 # @returns: HashRef of metadata

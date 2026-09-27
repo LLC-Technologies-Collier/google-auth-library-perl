@@ -17,7 +17,15 @@ our $VERSION = '0.13';
 requires 'request';
 
 # Initiates a stream handle
-# @param %args: Similar to request, but for streaming
+# @param %args:
+#   method: HTTP method (GET, POST, etc.) or gRPC method
+#   url/path: Target URL or path
+#   headers: HashRef of headers
+#   body: Raw bytes payload (String or ScalarRef)
+#   timeout: Timeout in seconds
+#   on_data: CodeRef invoked with data chunk (raw bytes)
+#   on_eof: CodeRef invoked on EOF
+#   on_error: CodeRef invoked on error
 # @returns: A Stream object implementing Google::Cloud::Transport::Role::Stream
 requires 'start_stream';
 

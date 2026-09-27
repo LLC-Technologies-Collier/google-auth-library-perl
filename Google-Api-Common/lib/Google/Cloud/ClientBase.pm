@@ -43,7 +43,7 @@ sub encode_payload {
             croak 'Cannot serialize payload to protobuf: not a valid object';
         }
     } else {
-        croak "Unsupported format: $format";
+        croak 'Unsupported format: ' . $format;
     }
 }
 
@@ -74,9 +74,34 @@ sub decode_payload {
             croak 'Cannot parse protobuf response: missing response_class or parse method';
         }
     } else {
-        croak "Unsupported format: $format";
+        croak 'Unsupported format: ' . $format;
     }
 }
+
+=head2 start_stream
+
+Initiates a stream and returns a high-level Google::Cloud::ClientBase::Stream object.
+
+=cut
+
+sub start_stream {
+    my ($self, %args) = @_;
+    
+    require Google::Cloud::ClientBase::Stream;
+    my $stream_wrapper = Google::Cloud::ClientBase::Stream->new();
+    
+    my $low_level_stream = $self->transport->start_stream(
+        %args,
+        on_data  => sub { $stream_wrapper->_handle_data(@_) },
+        on_eof   => sub { $stream_wrapper->_handle_eof(@_) },
+        on_error => sub { $stream_wrapper->_handle_error(@_) },
+    );
+    
+    $stream_wrapper->low_level_stream($low_level_stream) if $low_level_stream;
+    
+    return $stream_wrapper;
+}
+
 
 1;
 
