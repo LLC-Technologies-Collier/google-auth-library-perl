@@ -134,28 +134,44 @@ sub fetch_access_token {
   my $ua = $self->ua;
   $log->infof('Requesting impersonated access token from %s...',
     $self->impersonation_url);
-  my $response = Google::Auth::RetryHelper->execute_with_retry(
+  my $response_body = Google::Auth::RetryHelper->execute_with_retry(
     sub {
-      my $res = $ua->post(
-        $self->impersonation_url,
-        'Content-Type'  => 'application/json',
-        'Authorization' => 'Bearer ' . $source_token,
-        'Content'       => $req_body
+      my $future = $self->transport->request(
+        method  => 'POST',
+        url     => $self->impersonation_url,
+        headers => {
+          'Content-Type'  => 'application/json',
+          'Authorization' => 'Bearer ' . $source_token,
+        },
+        body => $req_body,
       );
-      if (!$res->is_success) {
-        $log->warnf('Impersonated token exchange failed: status %s',
-          $res->code);
+
+      my ($body, $headers);
+      my $future_res = eval { ($body, $headers) = $future->get(); 1 };
+
+      if (!$future_res) {
+        my ($err_msg, $cat, $details) = $future->failure;
+        my $code       = 0;
+        my $error_body = '';
+        if (ref($details) eq 'HASH') {
+          $code       = $details->{code} // 0;
+          $error_body = $details->{body} // '';
+        } elsif (eval { $details->can('code') }) {
+          $code       = $details->code // 0;
+          $error_body = $details->decoded_content // $details->content // '';
+        }
+        $log->warnf('Impersonated token exchange failed: status %s', $code);
         Google::Auth::Error->throw(
           'Service account impersonation failed with status ' .
-            $res->code . ': ' .
-            $res->decoded_content);
+            $code . ': ' .
+            $error_body);
       }
-      return $res;
+      return $body;
     },
     %options
   );
 
-  my $res_data = decode_json($response->decoded_content);
+  my $res_data = decode_json($response_body);
   $self->access_token($res_data->{accessToken});
   $self->expires_at($res_data->{expireTime});
 

@@ -36,18 +36,6 @@ has ua => (
   },
 );
 
-has transport => (
-  is      => 'ro',
-  lazy    => 1,
-  builder => '_build_transport',
-);
-
-sub _build_transport {
-  my ($self) = @_;
-  require Google::Cloud::Transport::Adapter::LWP;
-  return Google::Cloud::Transport::Adapter::LWP->new(user_agent => $self->ua);
-}
-
 has '+project_id' => (
   is      => 'lazy',
   builder => '_build_project_id',
@@ -112,7 +100,7 @@ sub on_gce {
   my $host   = 'metadata.google.internal';
   my $future = $transport->request(
     method  => 'GET',
-    url     => "http://$host/computeMetadata/v1/instance/",
+    url     => 'http://' . $host . '/computeMetadata/v1/instance/',
     headers => {'Metadata-Flavor' => 'Google'},
   );
 
@@ -125,7 +113,7 @@ sub on_gce {
   $host   = '169.254.169.254';
   $future = $transport->request(
     method  => 'GET',
-    url     => "http://$host/computeMetadata/v1/instance/",
+    url     => 'http://' . $host . '/computeMetadata/v1/instance/',
     headers => {'Metadata-Flavor' => 'Google'},
   );
 

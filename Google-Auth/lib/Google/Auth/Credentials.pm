@@ -58,6 +58,21 @@ has is_refreshing => (
   default => sub { 0 },
 );
 
+has transport => (
+  is      => 'ro',
+  lazy    => 1,
+  builder => '_build_transport',
+);
+
+sub _build_transport {
+  my ($self) = @_;
+  require Google::Cloud::Transport::Adapter::LWP;
+  if ($self->can('ua')) {
+    return Google::Cloud::Transport::Adapter::LWP->new(user_agent => $self->ua);
+  }
+  return Google::Cloud::Transport::Adapter::LWP->new();
+}
+
 around BUILDARGS => sub {
   my ($orig, $class, @args) = @_;
 
