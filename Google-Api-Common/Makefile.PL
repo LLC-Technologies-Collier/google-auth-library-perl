@@ -17,10 +17,13 @@ my %WriteMakefileArgs = (
         'Test::More' => '0',
     },
     PREREQ_PM => {
-        'Protobuf'                => '0.01',
-
-        #'ABC'              => '1.6',
-        #'Foo::Bar::Module' => '5.0401',
+        'Protobuf'      => '0.01',
+        'Moo'           => '0',
+        'Future'        => '0',
+        'LWP::UserAgent' => '0',
+        'JSON::MaybeXS' => '0',
+        'HTTP::Request' => '0',
+        'Log::Any'      => '0',
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Google-Api-Common-*' },
