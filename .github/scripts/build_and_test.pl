@@ -63,7 +63,7 @@ eval {
 };
 
 my @all_known_dirs = qw(
-    Protobuf Google-Auth Google-Api-Common Google-gRPC Module-Starter-Protobuf
+    Protobuf Google-Api-Common Google-Auth Google-gRPC Module-Starter-Protobuf
     Google-Ai-Generativelanguage-V1beta
     Google-Cloud-Bigquery-Storage-V1 Google-Cloud-Bigquery-V2 Google-Cloud-Build-V1
     Google-Cloud-Composer-V1 Google-Cloud-Compute-V1 Google-Cloud-Dataflow-V1beta3
@@ -171,12 +171,12 @@ sub build_package {
         File::Spec->catdir($top_abs, 'local', 'lib', 'perl5', $Config{archname}),
         File::Spec->catdir($top_abs, 'Protobuf', 'blib', 'lib'),
         File::Spec->catdir($top_abs, 'Protobuf', 'blib', 'arch'),
+        File::Spec->catdir($top_abs, 'Google-Api-Common', 'blib', 'lib'),
+        File::Spec->catdir($top_abs, 'Google-Api-Common', 'blib', 'arch'),
         File::Spec->catdir($top_abs, 'Google-Auth', 'blib', 'lib'),
         File::Spec->catdir($top_abs, 'Google-Auth', 'blib', 'arch'),
         File::Spec->catdir($top_abs, 'Google-gRPC', 'blib', 'lib'),
         File::Spec->catdir($top_abs, 'Google-gRPC', 'blib', 'arch'),
-        File::Spec->catdir($top_abs, 'Google-Api-Common', 'blib', 'lib'),
-        File::Spec->catdir($top_abs, 'Google-Api-Common', 'blib', 'arch'),
         File::Spec->catdir($top_abs, 'Module-Starter-Protobuf', 'blib', 'lib'),
         File::Spec->catdir($top_abs, 'Module-Starter-Protobuf', 'blib', 'arch'),
         File::Spec->rel2abs('local/lib/perl5'),
