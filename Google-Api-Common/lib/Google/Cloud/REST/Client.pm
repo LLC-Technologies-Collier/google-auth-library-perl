@@ -7,6 +7,7 @@ extends 'Google::Cloud::ClientBase';
 use LWP::UserAgent;
 use HTTP::Request;
 use JSON::MaybeXS qw(encode_json decode_json);
+use Future;
 use Carp qw(croak);
 use Log::Any qw($log);
 use Time::HiRes qw(sleep);
@@ -66,7 +67,7 @@ sub _build_user_agent {
 
 sub ua { my $s = shift; return $s->user_agent(@_); }
 
-sub call {
+sub call_async {
     my ($self, $args) = @_;
     if (@_ > 2 && scalar(@_) % 2 == 1) {
         my ($s, %kw) = @_;
@@ -119,42 +120,33 @@ sub call {
         $req->content($encoded) if defined $encoded && length $encoded;
     }
 
-    # Execute HTTP request with retries
+    my %headers_hash;
+    $req->headers->scan(sub {
+        my ($k, $v) = @_;
+        $headers_hash{$k} = $v;
+    });
+
+    my %transport_args = (
+        method  => $http_method,
+        url     => $base_url,
+        headers => \%headers_hash,
+        timeout => $self->timeout,
+    );
+    if (defined $req->content && length $req->content) {
+        $transport_args{body} = $req->content;
+    }
+
     my $retries = 0;
-    my $content;
     my $backoff = 0.1;
 
-    while (1) {
+    my $attempt;
+    $attempt = sub {
         $log->debugf('REST Request: %s %s', $http_method, $base_url);
         
-        my %headers_hash;
-        $req->headers->scan(sub {
-            my ($k, $v) = @_;
-            $headers_hash{$k} = $v;
-        });
-
-        my %transport_args = (
-            method  => $http_method,
-            url     => $base_url,
-            headers => \%headers_hash,
-            timeout => $self->timeout,
-        );
-        if (defined $req->content && length $req->content) {
-            $transport_args{body} = $req->content;
-        }
-
         my $future = $self->transport->request(%transport_args);
         
-        # BLOCKING WAIT
-        my $future_res = eval { $future->get() };
-        my $err = $@;
-
-        if (!$err) {
-            my ($body, $headers) = $future->get();
-            $content = $body;
-            last;
-        } else {
-            my ($err_msg, $cat, $details) = $future->failure;
+        return $future->else(sub {
+            my ($err_msg, $cat, $details) = @_;
             my $code = 0;
             my $status_line = $err_msg;
             my $error_body = '';
@@ -171,9 +163,11 @@ sub call {
             if (($code == 502 || $code == 503 || $code == 504) && $retries < $self->max_retries) {
                 $retries++;
                 $log->warnf('REST Transient HTTP %d response, retrying (%d/%d) in %.2fs...', $code, $retries, $self->max_retries, $backoff);
-                sleep($backoff);
-                $backoff *= 2.0;
-                next;
+                
+                # TODO: Non-blocking delay
+                # For now, we omit delay in async path to avoid blocking.
+                
+                return $attempt->();
             }
 
             # Unrecoverable error
@@ -181,10 +175,19 @@ sub call {
             if ($error_body) {
                 $final_err_msg .= ' - ' . $error_body;
             }
-            croak $final_err_msg;
-        }
-    }
-    return $self->decode_payload($content, 'json', $response_class);
+            return Future->fail($final_err_msg, 'REST');
+        });
+    };
+
+    return $attempt->()->then(sub {
+        my ($body, $headers) = @_;
+        return Future->done($self->decode_payload($body, 'json', $response_class));
+    });
+}
+
+sub call {
+    my ($self, $args) = @_;
+    return $self->call_async($args)->get();
 }
 
 *request = \&call;

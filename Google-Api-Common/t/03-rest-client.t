@@ -48,4 +48,39 @@ subtest 'REST Request Execution with Mock LWP UserAgent' => sub {
     is($res->{datasets}->[0]->{id}, 'ds1', 'Dataset ID matches');
 };
 
+subtest 'REST Request Execution Async with Mock LWP UserAgent' => sub {
+    my $mock_ua = Test::LWP::UserAgent->new;
+    $mock_ua->map_response(
+        sub {
+            my $req = shift;
+            return $req->url->path eq '/bigquery/v2/projects/test-project/datasets'
+                && $req->header('Authorization') eq 'Bearer mock-bearer-token-12345';
+        },
+        HTTP::Response->new(
+            200, 'OK',
+            ['Content-Type' => 'application/json'],
+            encode_json({ kind => 'bigquery#datasetList', datasets => [{ id => 'ds1' }] })
+        )
+    );
+
+    my $client = Google::Cloud::REST::Client->new(
+        target     => 'bigquery.googleapis.com',
+        auth_token => 'mock-bearer-token-12345',
+        user_agent => $mock_ua,
+    );
+
+    my $future = $client->call_async({
+        method => 'GET',
+        path   => 'bigquery/v2/projects/test-project/datasets',
+    });
+
+    ok($future, 'Got Future from call_async');
+    
+    my $res = $future->get();
+
+    ok($res, 'Got REST response from future');
+    is($res->{kind}, 'bigquery#datasetList', 'Response kind matches');
+    is($res->{datasets}->[0]->{id}, 'ds1', 'Dataset ID matches');
+};
+
 done_testing();
