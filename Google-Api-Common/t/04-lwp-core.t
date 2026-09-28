@@ -47,4 +47,48 @@ subtest 'Failed request' => sub {
     isa_ok($res, 'HTTP::Response', 'Response object included');
 };
 
+subtest 'Request with Body' => sub {
+    my $mock_ua = Test::LWP::UserAgent->new;
+    my $captured_req;
+    
+    $mock_ua->map_response(
+        qr{example.com/post} => sub {
+            my ($request) = @_;
+            $captured_req = $request;
+            return HTTP::Response->new(200, 'OK', [], 'Success');
+        }
+    );
+
+    my $adapter = Google::Cloud::Transport::Adapter::LWP->new(user_agent => $mock_ua);
+    
+    # Test string body
+    my $future = $adapter->request(
+        method => 'POST',
+        url    => 'https://example.com/post',
+        body   => 'Hello Body',
+    );
+    ok($future->is_done, 'Request done');
+    is($captured_req->content, 'Hello Body', 'Correct string body sent');
+    
+    # Test scalar ref body
+    my $body_scalar = 'Hello Scalar';
+    my $future2 = $adapter->request(
+        method => 'POST',
+        url    => 'https://example.com/post',
+        body   => \$body_scalar,
+    );
+    ok($future2->is_done, 'Request 2 done');
+    is($captured_req->content, 'Hello Scalar', 'Correct scalar ref body sent');
+};
+
+subtest 'Input Validation (Request)' => sub {
+    my $adapter = Google::Cloud::Transport::Adapter::LWP->new();
+    
+    # Missing URL in request()
+    my $future = $adapter->request();
+    ok($future->is_failed, 'Request without URL failed');
+    my ($err, $cat) = $future->failure;
+    is($err, 'URL/Path is required', 'Correct error message for missing URL in request');
+};
+
 done_testing();

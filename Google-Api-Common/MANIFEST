@@ -74,6 +74,7 @@ lib/Google/Cloud/ExtendedOperations/Types.pm
 lib/Google/Cloud/REST/Client.pm
 lib/Google/Cloud/Transport/Adapter/LWP.pm
 lib/Google/Cloud/Transport/Adapter/NetCurl.pm
+lib/Google/Cloud/Transport/Adapter/Nghttp2.pm
 lib/Google/Cloud/Transport/Configuration.pm
 lib/Google/Cloud/Transport/Role/Adapter.pm
 lib/Google/Cloud/Transport/Role/Stream.pm
@@ -121,8 +122,18 @@ META.yml
 README
 SECURITY.md
 t/00-load.t
+t/01-client-base.t
+t/02-client-base-stream.t
 t/03-rest-client.t
-t/04-transport-adapter-lwp.t
+t/04-lwp-config.t
+t/04-lwp-core.t
+t/04-lwp-streaming.t
+t/05-nghttp2-core.t
+t/06-nghttp2-streaming.t
+t/07-nghttp2-tls.t
+t/08-nghttp2-session.t
+t/09-nghttp2-protocol.t
+t/10-nghttp2-future.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
