@@ -25,6 +25,18 @@ my %WriteMakefileArgs = (
         'HTTP::Request' => '0',
         'Log::Any'      => '0',
     },
+    META_MERGE => {
+        'meta-spec' => { version => 2 },
+        prereqs => {
+            runtime => {
+                recommends => {
+                    'AnyEvent'              => '0',
+                    'Net::HTTP2::nghttp2' => '0',
+                    'Net::Curl'             => '0',
+                },
+            },
+        },
+    },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Google-Api-Common-*' },
 );

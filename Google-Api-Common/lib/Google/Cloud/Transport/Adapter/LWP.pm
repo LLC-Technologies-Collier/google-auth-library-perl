@@ -7,6 +7,7 @@ use LWP::UserAgent;
 use HTTP::Request;
 use Future;
 use Carp qw(croak);
+use Log::Any qw($log);
 
 use Google::Cloud::Transport::Configuration;
 
@@ -58,6 +59,8 @@ sub request {
         return Future->fail('URL/Path is required', 'Transport');
     }
 
+    $log->debugf('LWP Request: %s %s', $method, $url) if $log;
+
     my $req = HTTP::Request->new($method => $url);
     
     while (my ($k, $v) = each %$headers) {
@@ -77,6 +80,8 @@ sub request {
     }
 
     my $res = $ua->request($req);
+
+    $log->debugf('LWP Response: %s', $res->status_line) if $log;
 
     my $future = Future->new;
     
@@ -107,6 +112,8 @@ sub start_stream {
         croak 'URL/Path is required';
     }
 
+    $log->debugf('LWP Stream Request: %s %s', $method, $url) if $log;
+
     my $req = HTTP::Request->new($method => $url);
     
     while (my ($k, $v) = each %$headers) {
@@ -125,11 +132,14 @@ sub start_stream {
 
     my $content_cb = sub {
         my ($chunk, $res, $protocol) = @_;
+        $log->tracef('LWP Stream Chunk: %d bytes', length($chunk)) if $log;
         $on_data->($chunk);
         # Note: LWP doesn't support pause/resume naturally in this callback.
     };
 
     my $res = $ua->request($req, $content_cb);
+
+    $log->debugf('LWP Stream Response: %s', $res->status_line) if $log;
 
     if ($res->is_success) {
         $on_eof->() if $on_eof;
