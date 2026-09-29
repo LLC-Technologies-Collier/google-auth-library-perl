@@ -186,8 +186,8 @@ sub call_async {
 }
 
 sub call {
-    my ($self, $args) = @_;
-    return $self->call_async($args)->get();
+    my $self = shift;
+    return $self->call_async(@_)->get();
 }
 
 *request = \&call;
