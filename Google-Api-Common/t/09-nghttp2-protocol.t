@@ -3,6 +3,11 @@ use warnings;
 use Test::More;
 use Test::MockModule;
 
+BEGIN {
+    eval 'use Net::HTTP2::nghttp2; 1'
+      or plan skip_all => 'Net::HTTP2::nghttp2 required for this test';
+}
+
 use Google::Cloud::Transport::Adapter::Nghttp2;
 
 subtest 'Nghttp2 Error Callbacks' => sub {
