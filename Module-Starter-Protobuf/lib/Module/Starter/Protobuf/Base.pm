@@ -306,8 +306,9 @@ sub _generate_client_wrapper {
     my $service_to_gen = $self->{_module_to_service}->{$module_name};
     $service_name = $service_to_gen if $service_to_gen;
 
-    # Pre-scan messages across all files to build a dictionary
+    # Pre-scan messages across all files to build a dictionary (and capture direct fields for POD)
     $self->{_message_file_base} = {};
+    $self->{_message_fields}    = {};
     for my $proto_file (@{$self->{_protobuf_files}}) {
         my $content = path($proto_file)->slurp_utf8();
         $content =~ s{ // .*? $ }{}gmx;
@@ -321,11 +322,59 @@ sub _generate_client_wrapper {
         my $fname = basename($proto_file);
         $fname =~ s/\.proto$//;
         my $pm_base = join '', map { ucfirst($_) } split /_/, $fname;
+        my $msg_prefix = _proto_to_perl_namespace($pkg) . '::' . $pm_base;
         
-        while ($content =~ /^\s*message\s+(\w+)/gmx) {
+        while ($content =~ /^\s*message\s+(\w+)\s*\{/gmx) {
             my $msg = $1;
             $self->{_message_file_base}->{"$pkg.$msg"} = $pm_base;
             $self->{_message_file_base}->{$msg} = $pm_base; # Fallback
+
+            # Extract top-level body of this message using brace depth
+            my $start_pos = pos($content);
+            my $depth     = 1;
+            my $end_pos   = $start_pos;
+            my $len       = length($content);
+            my $body      = '';
+            while ($end_pos < $len && $depth > 0) {
+                my $ch = substr($content, $end_pos, 1);
+                if ($ch eq '{') {
+                    $depth++;
+                } elsif ($ch eq '}') {
+                    $depth--;
+                } elsif ($depth == 1) {
+                    $body .= $ch;
+                }
+                $end_pos++;
+            }
+
+            my @fields;
+            for my $line (split /\n/, $body) {
+                next if $line =~ /^\s*(?:option|reserved|extensions|extend|syntax|package|import|oneof|enum|message)\b/;
+                if ($line =~ /^\s*map\s*<\s*([\w\.]+)\s*,\s*([\w\.]+)\s*>\s+(\w+)\s*=\s*\d+/) {
+                    push @fields, {
+                        name           => $3,
+                        type           => "map<$1, $2>",
+                        raw_type       => $2,
+                        is_map         => 1,
+                        repeated       => 0,
+                        proto_package  => $pkg,
+                        message_prefix => $msg_prefix,
+                    };
+                } elsif ($line =~ /^\s*(?:(repeated|optional|required)\s+)?([\w\.]+)\s+(\w+)\s*=\s*\d+/) {
+                    my ($qual, $ftype, $fname_f) = ($1 || '', $2, $3);
+                    push @fields, {
+                        name           => $fname_f,
+                        type           => $ftype,
+                        raw_type       => $ftype,
+                        is_map         => 0,
+                        repeated       => ($qual eq 'repeated' ? 1 : 0),
+                        proto_package  => $pkg,
+                        message_prefix => $msg_prefix,
+                    };
+                }
+            }
+            $self->{_message_fields}->{"$pkg.$msg"} = \@fields;
+            $self->{_message_fields}->{$msg}        = \@fields;
         }
     }
 
@@ -375,11 +424,12 @@ sub _generate_client_wrapper {
                 my $grpc_service_path = $file_package . '.' . $file_service_name;
 
                 my $m_info = {
-                    raw_name => $method_name,
-                    perl_name => $perl_method_name,
-                    input_class => $input_class,
-                    output_class => $output_class,
-                    service_path => $grpc_service_path,
+                    raw_name      => $method_name,
+                    perl_name     => $perl_method_name,
+                    input_type    => $input_type,
+                    input_class   => $input_class,
+                    output_class  => $output_class,
+                    service_path  => $grpc_service_path,
                     proto_package => $file_package,
                     service_name  => $file_service_name,
                 };
@@ -511,10 +561,61 @@ EOF
 
 
     if (@methods) {
-        # Generate methods POD block dynamically
+        my %proto_scalars = map { $_ => 1 } qw(
+            double float int32 int64 uint32 uint64 sint32 sint64
+            fixed32 fixed64 sfixed32 sfixed64 bool string bytes
+        );
+
+        # Generate methods POD block dynamically with signatures, parameter links, and return types
         $methods_pod = "${EQ}head2 METHODS\n\nThe following RPC methods are available in this client:\n\n${EQ}over 4\n\n";
         for my $m (@methods) {
-            $methods_pod .= sprintf("${EQ}item * B<%s>\n\nCalls the RPC method C<%s> on the service. Takes a hash of parameters representing the request.\n\n", $m->{perl_name}, $m->{raw_name});
+            my $in_key = ($m->{input_type} && $m->{input_type} =~ /\./)
+                ? $m->{input_type}
+                : ($m->{proto_package} ? "$m->{proto_package}.$m->{input_type}" : $m->{input_type});
+            my $fields = $self->{_message_fields}->{$in_key}
+                || ($m->{input_type} ? $self->{_message_fields}->{$m->{input_type}} : undef)
+                || [];
+
+            my $example = "    my \$response = \$client->$m->{perl_name}(";
+            if (@$fields) {
+                $example .= "\n";
+                for my $f (@$fields) {
+                    my $placeholder = $f->{is_map} ? '{ ... }' : ($f->{repeated} ? '[ ... ]' : "\$$f->{name}");
+                    $example .= sprintf("        %-24s => %s,\n", $f->{name}, $placeholder);
+                }
+                $example .= "    );\n";
+            } else {
+                $example .= ");\n";
+            }
+
+            my $params_pod = '';
+            if (@$fields) {
+                $params_pod = "Parameters:\n\n${EQ}over 4\n\n";
+                for my $f (@$fields) {
+                    my $type_doc;
+                    if ($f->{is_map}) {
+                        $type_doc = "C<$f->{type}> (HashRef)";
+                    } elsif ($proto_scalars{$f->{raw_type}}) {
+                        $type_doc = $f->{repeated} ? "ArrayRef of C<$f->{raw_type}>" : "C<$f->{raw_type}>";
+                    } else {
+                        my $perl_cls = $self->_resolve_perl_type($f->{raw_type}, $f->{proto_package}, $f->{message_prefix});
+                        $type_doc = $f->{repeated} ? "ArrayRef of L<$perl_cls>" : "L<$perl_cls>";
+                    }
+                    $params_pod .= "${EQ}item * C<$f->{name}> - $type_doc\n\n";
+                }
+                $params_pod .= "${EQ}back\n\n";
+            }
+
+            $methods_pod .= sprintf(
+                "${EQ}item * B<%s>\n\n%s\nCalls the RPC method C<%s> on C<%s>.\n\nRequest: L<%s>\n\nReturns: L<%s>\n\n%s",
+                $m->{perl_name},
+                $example,
+                $m->{raw_name},
+                $m->{service_path},
+                $m->{input_class},
+                $m->{output_class},
+                $params_pod,
+            );
         }
         $methods_pod .= "${EQ}back\n\n";
 
