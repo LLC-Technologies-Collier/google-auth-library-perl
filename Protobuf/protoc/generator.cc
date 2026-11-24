@@ -511,6 +511,8 @@ std::string PerlCodeGenerator::GenerateModule(
   std::string default_host = GetDefaultHost(proto_pkg);
 
   std::ostringstream pod_services;
+  std::string first_client_pkg;
+  std::string first_rpc_method;
 
   for (size_t i = 0; i < service_count; i++) {
     const proto2_ServiceDescriptorProto* srv = services[i];
@@ -592,6 +594,11 @@ std::string PerlCodeGenerator::GenerateModule(
                    << "Invokes gRPC RPC C<" << full_service << "." << m_name << ">.\n"
                    << "Accepts a C<" << req_class << "> object (or hashref) and returns a C<"
                    << res_class << "> object.\n\n";
+
+      if (first_client_pkg.empty()) {
+        first_client_pkg = client_pkg;
+        first_rpc_method = snake_method;
+      }
     }
 
     pod_services << "=back\n\n";
@@ -622,6 +629,11 @@ std::string PerlCodeGenerator::GenerateModule(
     ss << "    my $decoded = " << full_first << "->parse($bytes);\n\n";
     ss << "    # Canonical ProtoJSON\n";
     ss << "    my $json = $msg->to_json();\n\n";
+    if (!first_client_pkg.empty() && !first_rpc_method.empty()) {
+      ss << "    # Invoke a gRPC RPC\n";
+      ss << "    my $client = " << first_client_pkg << "->new();\n";
+      ss << "    my $resp   = $client->" << first_rpc_method << "($msg);\n\n";
+    }
   }
 
   ss << "=head1 DESCRIPTION\n\n"
