@@ -510,27 +510,30 @@ std::string PerlCodeGenerator::GenerateModule(
   absl::string_view proto_pkg(pkg_sv.data, pkg_sv.size);
   std::string default_host = GetDefaultHost(proto_pkg);
 
+  std::ostringstream pod_services;
+
   for (size_t i = 0; i < service_count; i++) {
     const proto2_ServiceDescriptorProto* srv = services[i];
     upb_StringView srv_name_sv = proto2_ServiceDescriptorProto_name(srv);
     absl::string_view srv_name(srv_name_sv.data, srv_name_sv.size);
 
-    ss << "# === Service Client: " << package_name_ << "::" << srv_name
-       << "Client ===\n";
-    ss << "package " << package_name_ << "::" << srv_name << "Client;\n\n";
+    std::string client_pkg = absl::StrCat(package_name_, "::", srv_name, "Client");
+    std::string full_service = proto_pkg.empty()
+                                   ? std::string(srv_name)
+                                   : absl::StrCat(proto_pkg, ".", srv_name);
 
-    ss << "=pod\n\n";
-    ss << "=head2 Service Client: " << package_name_ << "::" << srv_name
-       << "Client\n\n";
-    ss << "Client stub representing the remote C<" << srv_name << "> gRPC "
-          "service. Delegates call dispatching to L<Google::gRPC::Client>.\n\n";
-    ss << "=head3 target\n\n";
-    ss << "The endpoint target address. Defaults to C<" << default_host
-       << ">.\n\n";
-    ss << "=head3 credentials\n\n";
-    ss << "The authentication credentials provider. Defaults to application "
-          "default credentials via L<Google::Auth>.\n\n";
-    ss << "=cut\n\n";
+    ss << "# === Service Client: " << client_pkg << " ===\n";
+    ss << "package " << client_pkg << ";\n\n";
+
+    pod_services << "=head2 " << client_pkg << "\n\n"
+                 << "gRPC client stub for C<" << full_service
+                 << "> (delegates to L<Google::gRPC::Client>).\n\n"
+                 << "    my $client = " << client_pkg << "->new(\n"
+                 << "        target      => '" << default_host << "',\n"
+                 << "        credentials => Google::Auth->default(),\n"
+                 << "    );\n\n"
+                 << "=head3 RPC Methods\n\n"
+                 << "=over 4\n\n";
 
     ss << "use Moo;\n";
     ss << "use Google::Auth;\n";
@@ -584,7 +587,14 @@ std::string PerlCodeGenerator::GenerateModule(
       ss << "        response_class => '" << res_class << "',\n";
       ss << "    });\n";
       ss << "}\n\n";
+
+      pod_services << "=item * B<" << snake_method << ">( $request | \\%args )\n\n"
+                   << "Invokes gRPC RPC C<" << full_service << "." << m_name << ">.\n"
+                   << "Accepts a C<" << req_class << "> object (or hashref) and returns a C<"
+                   << res_class << "> object.\n\n";
     }
+
+    pod_services << "=back\n\n";
   }
 
   upb_StringView proto_file_sv = proto2_FileDescriptorProto_name(file_proto);
@@ -619,6 +629,11 @@ std::string PerlCodeGenerator::GenerateModule(
      << proto_file_name << ">. All message classes inherit from\n"
      << "L<Protobuf::Message> and support C<new()>, C<serialize()>, C<parse()>,\n"
      << "C<to_json()>, C<from_json()>, C<to_text()>, and C<to_perl()>.\n\n";
+
+  std::string srvs_pod = pod_services.str();
+  if (!srvs_pod.empty()) {
+    ss << "=head1 SERVICES\n\n" << srvs_pod;
+  }
 
   std::string msgs_pod = pod_messages.str();
   if (!msgs_pod.empty()) {
